@@ -25,10 +25,10 @@ The product bar is not “many warnings.” The product bar is:
 
 ## Current Status
 
-- Current phase: `Phase 1 - CLI Bootstrap`
-- Repository maturity: `Planning complete, implementation not started`
-- Public promise today: docs-only repo with a concrete build plan
-- Public promise after Phase 1: runnable CLI skeleton with stable output model and test harness
+- Current phase: `Phase 2 - First Trustworthy Checks`
+- Repository maturity: `Phase 1 CLI skeleton implemented; real diagnostics not started`
+- Public promise today: runnable CLI skeleton with stable output model, test harness, and CI scaffold
+- Public promise after Phase 2: first real async diagnostics with fixture coverage and actionable wording
 
 ## Operating Rules
 
@@ -131,7 +131,7 @@ Exit criteria:
 
 ### Phase 1 - CLI Bootstrap
 
-Status: `[ ] Not started`
+Status: `[x] Complete`
 
 Goals:
 
@@ -141,17 +141,17 @@ Goals:
 
 Checklist:
 
-- [ ] Create `Cargo.toml` and `src/main.rs`
-- [ ] Implement `cargo async-doctor --help`
-- [ ] Define CLI argument model
-- [ ] Define diagnostics model with stable IDs
-- [ ] Add a placeholder scan flow that exits successfully
-- [ ] Add human-readable output renderer
-- [ ] Add JSON output renderer skeleton
-- [ ] Add baseline unit tests
-- [ ] Add fixture test harness scaffolding
-- [ ] Add CI for `cargo fmt`, `cargo clippy`, and `cargo test`
-- [ ] Document local verification commands in `README.md`
+- [x] Create `Cargo.toml` and `src/main.rs`
+- [x] Implement `cargo async-doctor --help`
+- [x] Define CLI argument model
+- [x] Define diagnostics model with stable IDs
+- [x] Add a placeholder scan flow that exits successfully
+- [x] Add human-readable output renderer
+- [x] Add JSON output renderer skeleton
+- [x] Add baseline unit tests
+- [x] Add fixture test harness scaffolding
+- [x] Add CI for `cargo fmt`, `cargo clippy`, and `cargo test`
+- [x] Document local verification commands in `README.md`
 
 Exit criteria:
 
@@ -308,15 +308,19 @@ A task is not done unless:
 - Phase 0 completed
 - Initial repo docs, license, and git hygiene established
 - Dual-push remote setup aligned with other repositories
+- Phase 1 completed with the initial Cargo project, CLI bootstrap, stable diagnostics model, and placeholder scan flow
+- Added separate human-readable and JSON renderers plus baseline unit and fixture-scaffolding tests
+- Added GitHub Actions CI for `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`
+- Updated `README.md` and this build tracker to match the implemented Phase 1 state
 
 ## Next Recommended Work
 
-When starting a fresh engineering session, begin with `Phase 1 - CLI Bootstrap`.
+When starting a fresh engineering session, begin with `Phase 2 - First Trustworthy Checks`.
 
 Suggested order:
 
-1. create the Cargo project
-2. establish CLI and diagnostics model
-3. add test harness scaffolding
-4. wire CI
+1. implement blocking sleep detection with positive and negative fixtures
+2. add at least one more high-confidence async hazard check
+3. tighten warning wording and explanation text alongside each check
+4. add structured output assertions for real diagnostics
 5. update this BUILD file as tasks complete

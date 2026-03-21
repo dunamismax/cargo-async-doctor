@@ -1,6 +1,6 @@
 # cargo-async-doctor
 
-`cargo-async-doctor` will be a Cargo subcommand for auditing common async Rust footguns and explaining how to fix them.
+`cargo-async-doctor` is a Cargo subcommand for auditing common async Rust footguns and explaining how to fix them.
 
 The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal is to sit one layer above them:
 
@@ -9,29 +9,48 @@ The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal 
 - point to a minimal fix
 - link to deeper guidance and examples
 
-Planned focus areas:
+## Status
+
+Phase 1: CLI Bootstrap is now implemented.
+
+The repository currently provides:
+
+- a runnable `cargo-async-doctor` binary crate
+- a stable CLI argument model for placeholder scans
+- a diagnostics model with stable check IDs reserved in code
+- separate human-readable and JSON renderers
+- baseline unit tests, fixture scaffolding, and CI
+
+What it does **not** provide yet:
+
+- real async misuse detection
+- per-check explanation content
+- `explain` mode
+
+Those land in Phase 2 and Phase 3, as tracked in [`BUILD.md`](BUILD.md).
+
+## Available Today
+
+Current command surface:
+
+```bash
+cargo async-doctor --help
+cargo async-doctor --message-format human
+cargo async-doctor --message-format json
+cargo async-doctor --workspace
+cargo async-doctor --manifest-path ./Cargo.toml
+```
+
+Current behavior is intentionally small: the scan flow succeeds, emits no diagnostics, and clearly marks itself as a Phase 1 placeholder.
+
+## Planned Focus Areas
+
+The first real checks should stay narrow and trustworthy:
 
 - blocking work inside async contexts
 - risky sync/async bridging patterns
-- cancellation and shutdown hazards
-- shared-state and guard-across-`.await` mistakes
-- tracing and observability setup gaps
+- guard-across-`.await` hazards
 - Tokio-specific runtime footguns where clear guidance exists
-
-## Status
-
-This repository is in Phase 1: CLI Bootstrap. Phase 0 positioning and planning are complete; the public repo currently contains the docs, scope, and build plan, and implementation has not started yet.
-
-## Intended UX
-
-The initial target is a familiar Cargo subcommand interface:
-
-```bash
-cargo async-doctor
-cargo async-doctor --workspace
-cargo async-doctor --message-format json
-cargo async-doctor explain blocking-in-async
-```
 
 The first release should favor a small number of trustworthy checks over broad but noisy coverage.
 
@@ -48,6 +67,7 @@ The first release should favor a small number of trustworthy checks over broad b
 - every warning should map to a documented fix path
 - false-positive control matters more than check count
 - runtime-specific guidance should be clearly labeled
+- output rendering stays separate from detection logic
 - examples and docs should be developed in lockstep with checks
 
 ## Relationship To `rust-async-field-guide`
@@ -64,17 +84,29 @@ The guide should own long-form teaching material:
 
 This crate should own fast diagnosis and actionable warnings.
 
-## Initial Check Candidates
+## Local Verification
 
-- `std::thread::sleep` or equivalent blocking calls inside async code
-- `std::fs` and other obvious blocking std APIs used directly from async contexts
-- suspicious `block_in_place` / `block_on` combinations
-- likely guard-held-across-`.await` cases not already covered well enough by current tooling
-- missing or weak tracing setup in async binaries where instrumentation is clearly intended
+From the repository root:
+
+```bash
+cargo run -- async-doctor --help
+cargo run -- --message-format human
+cargo run -- --message-format json
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+```
+
+Notes:
+
+- `cargo run -- async-doctor --help` verifies the Cargo-subcommand-style invocation path.
+- The two `cargo run` scan commands exercise both output renderers.
+- The lint and test commands match the repository CI workflow.
 
 ## Project Docs
 
-- [`BUILD.md`](BUILD.md) is the canonical build plan and agent handoff document.
+- [`BUILD.md`](BUILD.md) is the canonical build plan and status tracker.
+- [`fixtures/README.md`](fixtures/README.md) documents the initial fixture test scaffolding.
 
 ## License
 
