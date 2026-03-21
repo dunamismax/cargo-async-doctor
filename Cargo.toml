@@ -3,9 +3,12 @@ name = "cargo-async-doctor"
 version = "0.1.0"
 edition = "2021"
 description = "Cargo subcommand for diagnosing common async Rust hazards"
+authors = ["Stephen Sawyer"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/dunamismax/cargo-async-doctor"
+homepage = "https://github.com/dunamismax/cargo-async-doctor"
+documentation = "https://docs.rs/cargo-async-doctor"
 keywords = ["cargo", "async", "tokio", "diagnostics", "cli"]
 categories = ["command-line-utilities", "development-tools::cargo-plugins"]
 

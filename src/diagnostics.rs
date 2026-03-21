@@ -2,6 +2,8 @@ use std::str::FromStr;
 
 use serde::Serialize;
 
+pub const SCAN_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CheckId {
@@ -46,10 +48,10 @@ impl CheckId {
     pub const fn explanation(self) -> &'static str {
         match self {
             Self::BlockingSleepInAsync => {
-                "std::thread::sleep parks the OS thread, so calling it in async code blocks unrelated work scheduled on the same executor thread."
+                "std::thread::sleep blocks the current OS thread instead of yielding back to the async runtime."
             }
             Self::BlockingStdApiInAsync => {
-                "Synchronous std::fs calls block the executor thread until the filesystem operation finishes."
+                "Synchronous std::fs calls perform blocking filesystem I/O on the current thread instead of yielding to the async runtime."
             }
             Self::SyncAsyncBridgeHazard => {
                 "Calling Tokio block_on from async code reintroduces a synchronous wait at the runtime boundary and can panic or stall progress."
@@ -63,13 +65,13 @@ impl CheckId {
     pub const fn help(self) -> Option<&'static str> {
         match self {
             Self::BlockingSleepInAsync => Some(
-                "Prefer the runtime's async timer, such as tokio::time::sleep(...).await, or move the blocking sleep off the async path.",
+                "For Tokio code, prefer tokio::time::sleep(...).await. If the work must block, move it behind tokio::task::spawn_blocking or another synchronous boundary.",
             ),
             Self::BlockingStdApiInAsync => Some(
-                "Prefer tokio::fs for async filesystem work or isolate the blocking std::fs call behind tokio::task::spawn_blocking.",
+                "For Tokio code, prefer tokio::fs when the surrounding code is already async. If you must keep std::fs, isolate it behind tokio::task::spawn_blocking or another synchronous boundary.",
             ),
             Self::SyncAsyncBridgeHazard => Some(
-                "Keep the call chain async instead of blocking, or move the sync/async bridge to a clearly synchronous entry point.",
+                "Keep the call chain async. If a synchronous bridge is truly required, move it to a clearly synchronous entry point instead of nesting block_on inside async code.",
             ),
             Self::GuardAcrossAwait => None,
         }
@@ -152,7 +154,6 @@ pub struct ScanReport {
     pub target: ScanTarget,
     pub summary: ScanSummary,
     pub diagnostics: Vec<Diagnostic>,
-    pub placeholder: bool,
     pub notes: Vec<String>,
 }
 

@@ -48,10 +48,6 @@ fn render_human_scan(report: &ScanReport) -> String {
 
     output.push_str(&format!("warnings: {}\n", report.summary.warnings));
 
-    if report.placeholder {
-        output.push_str("mode: placeholder scan\n");
-    }
-
     if report.diagnostics.is_empty() {
         output.push_str("\nNo diagnostics emitted.\n");
     } else {
@@ -141,7 +137,7 @@ mod tests {
 
     use super::{render_explain_report, render_scan_report};
 
-    fn placeholder_report() -> ScanReport {
+    fn sample_scan_report() -> ScanReport {
         ScanReport {
             schema_version: 1,
             target: ScanTarget {
@@ -175,30 +171,31 @@ mod tests {
                 message: "Calls `std::thread::sleep` inside an async context, which blocks the current thread.".to_string(),
                 help: Some("help text".to_string()),
             }],
-            placeholder: true,
-            notes: vec!["placeholder report".to_string()],
+            notes: vec!["sample report".to_string()],
         }
     }
 
     #[test]
-    fn renders_human_placeholder_report() {
-        let rendered = render_scan_report(MessageFormat::Human, &placeholder_report()).unwrap();
+    fn renders_human_scan_report() {
+        let rendered = render_scan_report(MessageFormat::Human, &sample_scan_report()).unwrap();
 
         assert!(rendered.contains("cargo-async-doctor"));
-        assert!(rendered.contains("mode: placeholder scan"));
         assert!(rendered.contains("package=fixture-minimal-bin"));
         assert!(rendered.contains("location=src/main.rs:2"));
-        assert!(rendered.contains("note: placeholder report"));
+        assert!(rendered.contains("note: sample report"));
+        assert!(!rendered.contains("mode: placeholder scan"));
     }
 
     #[test]
-    fn renders_json_placeholder_report() {
-        let rendered = render_scan_report(MessageFormat::Json, &placeholder_report()).unwrap();
+    fn renders_json_scan_report_without_legacy_placeholder_field() {
+        let rendered = render_scan_report(MessageFormat::Json, &sample_scan_report()).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
 
-        assert!(rendered.contains("\"schema_version\": 1"));
-        assert!(rendered.contains("\"placeholder\": true"));
-        assert!(rendered.contains("\"package\""));
-        assert!(rendered.contains("\"location\""));
+        assert_eq!(value["schema_version"], serde_json::Value::from(1));
+        assert!(value.get("placeholder").is_none());
+        assert!(value.get("package").is_none());
+        assert!(value["diagnostics"][0]["package"].is_object());
+        assert!(value["diagnostics"][0]["location"].is_object());
     }
 
     #[test]

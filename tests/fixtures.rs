@@ -48,7 +48,10 @@ fn placeholder_fixture_scans_cleanly() {
 
     let report = scan::scan(&cli).unwrap();
 
-    assert!(!report.placeholder);
+    assert_eq!(
+        report.schema_version,
+        cargo_async_doctor::diagnostics::SCAN_SCHEMA_VERSION
+    );
     assert!(report.diagnostics.is_empty());
     assert_eq!(report.summary.total, 0);
     assert_eq!(report.target.packages.len(), 1);
@@ -231,7 +234,7 @@ fn json_output_for_workspace_fixture_is_structured() {
     let value: Value = serde_json::from_str(&rendered).unwrap();
 
     assert_eq!(value["schema_version"], 1);
-    assert_eq!(value["placeholder"], false);
+    assert!(value.get("placeholder").is_none());
     assert_eq!(value["summary"]["warnings"], 3);
     assert_eq!(
         value["diagnostics"][0]["package"]["name"],

@@ -9,7 +9,7 @@ use crate::analysis::{self, Finding, PackageContext};
 use crate::cli::Cli;
 use crate::diagnostics::{
     CheckId, Diagnostic, DiagnosticLocation, DiagnosticPackage, ScanPackageTarget, ScanReport,
-    ScanSummary, ScanTarget, Severity,
+    ScanSummary, ScanTarget, Severity, SCAN_SCHEMA_VERSION,
 };
 
 pub fn scan(cli: &Cli) -> Result<ScanReport> {
@@ -38,7 +38,7 @@ pub fn scan(cli: &Cli) -> Result<ScanReport> {
     let warnings = diagnostics.len();
 
     Ok(ScanReport {
-        schema_version: 1,
+        schema_version: SCAN_SCHEMA_VERSION,
         target: ScanTarget {
             workspace: cli.workspace,
             manifest_path: Some(manifest_path.display().to_string()),
@@ -57,7 +57,6 @@ pub fn scan(cli: &Cli) -> Result<ScanReport> {
             warnings,
         },
         diagnostics,
-        placeholder: false,
         notes,
     })
 }
@@ -198,7 +197,7 @@ fn diagnostic_from_finding(finding: Finding) -> Diagnostic {
             finding.matched
         ),
         CheckId::SyncAsyncBridgeHazard => format!(
-            "Uses `{}` inside an async context, which synchronously waits on async work.",
+            "Uses `{}` inside an async context, which synchronously waits on async work and can stall or panic at runtime.",
             finding.matched
         ),
         CheckId::GuardAcrossAwait => format!("Matched `{}`.", finding.matched),
@@ -330,7 +329,10 @@ mod tests {
 
         let report = scan(&cli).unwrap();
 
-        assert!(!report.placeholder);
+        assert_eq!(
+            report.schema_version,
+            crate::diagnostics::SCAN_SCHEMA_VERSION
+        );
         assert!(report.diagnostics.is_empty());
         assert_eq!(report.summary.total, 0);
         assert_eq!(report.summary.warnings, 0);

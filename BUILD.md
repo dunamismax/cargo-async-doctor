@@ -26,9 +26,9 @@ The product bar is not “many warnings.” The product bar is:
 ## Current Status
 
 - Current phase: `Phase 5 - Release Hardening`
-- Repository maturity: `Phase 4 workspace/package/path fidelity implemented for shipped checks`
-- Public promise today: first real async diagnostics with stable IDs, actionable wording, fixture-backed false-positive control, explain mode for every shipped check, and workspace-aware package/file/line reporting
-- Public promise after Phase 4: narrow trustworthy checks plus dependable workspace/package/file reporting; broader lint expansion remains separate
+- Repository maturity: `Phase 5 in-repo release hardening complete; external publish still pending`
+- Public promise today: first-release-ready async diagnostics with stable IDs, clearer warning wording, fixture-backed false-positive control, explain mode for every shipped check, workspace-aware package/file/line reporting, and a documented release/versioning process
+- External step still pending: publish `0.1.0` without changing the already-hardened in-repo surface
 
 ## Operating Rules
 
@@ -86,8 +86,9 @@ The tool currently supports:
 - structured JSON output
 - stable check IDs
 - `explain` mode for a specific check ID
+- schema-versioned scan output with stable field names
 
-The output contract should still stay intentionally small and easy to evolve.
+The output contract should stay intentionally small. Additive JSON changes are preferred; breaking JSON changes require a schema version bump and release-note callout.
 
 ## MVP Check Themes
 
@@ -245,7 +246,7 @@ Exit criteria:
 
 ### Phase 5 - Release Hardening
 
-Status: `[ ] Not started`
+Status: `[~] In-repo hardening complete; external publish pending`
 
 Goals:
 
@@ -253,21 +254,21 @@ Goals:
 
 Checklist:
 
-- [ ] Review warning wording for clarity and precision
-- [ ] Audit JSON format for stability and naming consistency
-- [ ] Add release checklist
-- [ ] Add versioning policy note
-- [ ] Add changelog or release notes process
-- [ ] Test against at least a few real repositories
-- [ ] Review false-positive and false-negative behavior
-- [ ] Finalize crate metadata for publication
-- [ ] Publish `0.1.0`
+- [x] Review warning wording for clarity and precision
+- [x] Audit JSON format for stability and naming consistency
+- [x] Add release checklist
+- [x] Add versioning policy note
+- [x] Add changelog or release notes process
+- [x] Test against at least a few real repositories
+- [x] Review false-positive and false-negative behavior
+- [x] Finalize crate metadata for publication
+- [ ] Publish `0.1.0` externally
 
 Exit criteria:
 
 - maintainers can defend the initial public scope
 - release process is documented
-- crate is ready for external users
+- crate is ready for external users before the final external publish step
 
 ### Phase 6 - Post-MVP Expansion
 
@@ -334,14 +335,20 @@ A task is not done unless:
 - Added multi-crate Phase 4 workspace fixtures covering a root package workspace, workspace-member scans, `--workspace` expansion, and virtual-workspace default-member behavior
 - Added package-aware diagnostics with workspace-relative file paths plus optional line and column reporting sourced from syntax spans
 - Updated human and JSON scan output to surface selected packages, package context, location fields, and current workspace/parsing limits
+- Phase 5 in-repo release hardening completed: warning/help wording tightened, the legacy `placeholder` JSON field was removed before first release, and crate metadata plus release docs were finalized
+- Added `docs/release.md` with the release checklist, versioning policy, changelog process, and JSON stability notes
+- Added `CHANGELOG.md` and updated `README.md` to reflect release-ready-in-repo status with external publish still pending
+- Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, `cargo package --allow-dirty --list`, and read-only scans against several real local repositories to review false positives and false negatives
+- Real-repo validation found two likely true positives in `gitpulse` (`std::fs::create_dir_all` and `std::fs::metadata` inside async functions), no false positives in the checked `tauri::async_runtime::block_on` sync setup path, and one expected false negative in `rust-async-field-guide/examples/blocking-in-async-code` because the current shipped scope does not follow function imports such as `use std::thread::sleep; sleep(...)`
 
 ## Next Recommended Work
 
-When starting a fresh engineering session, begin with `Phase 5 - Release Hardening`.
+When starting a fresh engineering session, finish the external `0.1.0` release steps documented in `docs/release.md`.
 
 Suggested order:
 
-1. review warning wording now that package and location context is richer
-2. audit the JSON scan format for naming and long-term stability before calling it release-ready
-3. test the tool against a few real repositories to pressure-check false positives, false negatives, and workspace behavior
-4. document release/versioning process before publishing `0.1.0`
+1. review and finalize the `CHANGELOG.md` release entry
+2. run `cargo publish --dry-run`
+3. publish `0.1.0`
+4. cut the matching GitHub release notes
+5. move to `Phase 6 - Post-MVP Expansion` only after the first release is out
