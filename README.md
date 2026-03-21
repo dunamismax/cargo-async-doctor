@@ -9,21 +9,27 @@ The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal 
 - point to a minimal fix
 - link to deeper guidance and examples
 
+## Package
+
+- crates.io: [`cargo-async-doctor`](https://crates.io/crates/cargo-async-doctor)
+- docs.rs: [`cargo-async-doctor`](https://docs.rs/cargo-async-doctor)
+- install: `cargo install cargo-async-doctor`
+
 ## Status
 
-Phase 5 release hardening is complete in-repo, local packaging and publish dry-run verification now pass, and the external `0.1.0` publish step is still pending human approval.
+`cargo-async-doctor` `0.1.0` is published on crates.io. The shipped surface is intentionally narrow, stable, and ready for real use.
 
 The repository currently provides:
 
 - a runnable `cargo-async-doctor` binary crate
 - a stable CLI argument model for scanning a selected manifest or explaining a shipped check ID
 - a diagnostics model with stable check IDs
-- canonical explain content for every shipped Phase 2 check
-- three real Phase 2 diagnostics backed by positive and negative fixtures
+- canonical explain content for every shipped check
+- three real diagnostics backed by positive and negative fixtures
 - Cargo metadata-driven package selection for package manifests, root-package workspaces, and virtual workspace manifests
 - separate human-readable and JSON renderers for both scan and explain output
 - package-aware diagnostics with workspace-relative file paths plus optional line and column reporting when a syntax span is available
-- a documented release checklist, versioning policy, and changelog process for the first public crate release
+- a documented release checklist, versioning policy, and changelog process for future releases
 - structured output tests, unit tests, fixture tests, and CI
 
 What it does **not** provide yet:
@@ -31,9 +37,6 @@ What it does **not** provide yet:
 - the reserved `guard-across-await` check, which stays out of the shipped surface because a syntax-only version would be too noisy
 - deep name resolution for macros, re-exports, wildcard imports, stored runtime handles, or block-local `use` items
 - guarantees that every future location will have a span; line and column data are best-effort and tied to direct syntax matches
-- the actual external crates.io publish step for `0.1.0`, which is intentionally tracked separately from in-repo release hardening
-
-Those remain tracked in [`BUILD.md`](BUILD.md).
 
 ## Available Today
 
@@ -59,7 +62,7 @@ Current behavior is intentionally narrow:
 - explain mode serves canonical shipped-check content by stable check ID
 - rendering stays separate from both detection and explain-content selection
 
-## Shipped Phase 2 Checks
+## Shipped Checks in v0.1.0
 
 - `blocking-sleep-in-async`
   Detects direct `std::thread::sleep(...)` calls, plus module aliases imported from `std::thread`, inside `async fn` bodies, async impl methods, nested `async { ... }` blocks, and async closures.
@@ -114,10 +117,10 @@ The detailed release checklist and changelog process live in [`docs/release.md`]
 ## Current Limits
 
 - Detection is still syntax-driven. It does not resolve macros, re-exports, wildcard imports, local `use` statements inside blocks, or function imports such as `use std::thread::sleep; sleep(...)` and `use std::fs::read_to_string; read_to_string(...)`.
-- The shipped checks still match only the narrow documented Phase 2 patterns; Phase 4 improves fidelity, not lint surface area.
+- The shipped checks still match only the narrow documented `0.1.0` patterns; the workspace and path improvements broaden targeting fidelity, not lint surface area.
 - Sync/async bridge detection still does not follow stored handles or runtimes such as `let handle = Handle::current(); handle.block_on(...)`.
 - Location data is best-effort: line and column fields are present for direct syntax matches, but not for future patterns that may need deeper analysis.
-- Explain mode covers the shipped Phase 2 checks only; `guard-across-await` remains reserved and intentionally unshipped until the project has stronger type/context handling.
+- Explain mode covers the shipped `0.1.0` checks only; `guard-across-await` remains reserved and intentionally unshipped until the project has stronger type/context handling.
 
 ## Non-Goals
 
@@ -176,13 +179,12 @@ Notes:
 - The scan commands exercise both the default manifest selection and the Phase 4 workspace/package selection paths.
 - The explain commands exercise the human and JSON explain renderers.
 - The lint and test commands match the repository CI workflow.
-- `cargo package --allow-dirty --list` is a local packaging sanity check before the actual publish step.
+- `cargo package --allow-dirty --list` is a local packaging sanity check before publishing a follow-on release.
 
 ## Project Docs
 
-- [`BUILD.md`](BUILD.md) is the canonical build plan and status tracker.
-- [`CHANGELOG.md`](CHANGELOG.md) tracks user-facing changes and release notes.
-- [`docs/release.md`](docs/release.md) documents the release checklist, versioning policy, and publication process.
+- [`CHANGELOG.md`](CHANGELOG.md) tracks user-facing release history.
+- [`docs/release.md`](docs/release.md) documents the release checklist, versioning policy, publication flow, and registry/docs.rs constraints.
 - [`fixtures/README.md`](fixtures/README.md) documents the fixture set.
 
 ## License

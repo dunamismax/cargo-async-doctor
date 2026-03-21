@@ -1,15 +1,15 @@
 # Release Process
 
-This document covers release hardening and publication steps for `cargo-async-doctor`.
+This document covers follow-on release preparation and publication for `cargo-async-doctor`.
 
 The project is intentionally narrow. A release is ready when the shipped checks, wording, docs, and machine-readable output can all be defended.
 
 ## Release Checklist
 
-### In-repo hardening
+### Pre-publish checks
 
 - [ ] `Cargo.toml` metadata is current: description, authors, license, repository, homepage, documentation, keywords, and categories
-- [ ] `README.md`, `BUILD.md`, and `CHANGELOG.md` match the actual shipped surface
+- [ ] `README.md`, `CHANGELOG.md`, and docs under `docs/` match the actual shipped surface
 - [ ] warning wording is reviewed for clarity, scope, and runtime-specific precision
 - [ ] every shipped check still has a stable check ID and `explain` coverage
 - [ ] scan JSON output still uses `schema_version` and documented field names
@@ -21,12 +21,11 @@ The project is intentionally narrow. A release is ready when the shipped checks,
 
 ### Publication steps
 
-These are intentionally separate from in-repo hardening.
-
 - [ ] review the final `CHANGELOG.md` entry for the release
 - [ ] create the release commit and tag
 - [ ] run `cargo publish --dry-run`
 - [ ] publish to crates.io
+- [ ] wait for docs.rs to pick up the release and spot-check the rendered crate page
 - [ ] cut the corresponding GitHub release notes
 
 ## Versioning Policy
@@ -52,6 +51,14 @@ Process:
 3. when cutting a release, rename `Unreleased` to the version number and add the release date
 4. keep the entries focused on behavior, output, diagnostics, and documentation that users or integrators will notice
 5. if JSON or check behavior changed, name it explicitly instead of hiding it under generic wording
+
+## Registry And Docs.rs Notes
+
+- crates.io publishes are permanent: a version can never be overwritten and the uploaded code cannot be deleted
+- crates.io package metadata such as the description, README, homepage, repository, documentation link, keywords, and categories is taken from the published package for that version
+- docs.rs builds automatically from the published crate, may lag briefly behind crates.io while a build is queued, and follows Cargo's `readme` rules plus any `package.metadata.docs.rs` settings from the published `Cargo.toml`
+- after publishing, maintainers can still yank or unyank a version and manage crate owners
+- changing packaged docs or metadata shown for the current release requires publishing a new crate version
 
 ## JSON Stability Notes
 
