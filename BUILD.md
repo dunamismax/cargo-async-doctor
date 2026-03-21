@@ -25,10 +25,10 @@ The product bar is not “many warnings.” The product bar is:
 
 ## Current Status
 
-- Current phase: `Phase 2 - First Trustworthy Checks`
-- Repository maturity: `Phase 2 checks implemented with fixture coverage; explain mode and workspace fidelity not started`
-- Public promise today: first real async diagnostics with stable IDs, actionable wording, and fixture-backed false-positive control
-- Public promise after Phase 2: narrow trustworthy checks only; broader explain/workspace features remain separate phases
+- Current phase: `Phase 4 - Workspace And Path Fidelity`
+- Repository maturity: `Phase 3 explain mode implemented for all shipped checks; workspace fidelity not started`
+- Public promise today: first real async diagnostics with stable IDs, actionable wording, fixture-backed false-positive control, and `explain` mode for every shipped check
+- Public promise after Phase 3: narrow trustworthy checks plus shipped explain mode; broader workspace and path-fidelity work remains separate
 
 ## Operating Rules
 
@@ -80,14 +80,14 @@ Expected near-term code shape:
 
 ## Output Contract
 
-The tool should eventually support:
+The tool currently supports:
 
 - concise human-readable terminal output
 - structured JSON output
 - stable check IDs
 - `explain` mode for a specific check ID
 
-The first implementation should keep the output contract intentionally small and easy to evolve.
+The output contract should still stay intentionally small and easy to evolve.
 
 ## MVP Check Themes
 
@@ -190,9 +190,9 @@ Exit criteria:
 
 Shipped scope:
 
-- `blocking-sleep-in-async` for `std::thread::sleep(...)` and `thread::sleep(...)` when `thread` is imported from `std::thread`
-- `blocking-std-api-in-async` for a narrow allowlist of direct `std::fs` and imported `fs::...` calls inside async contexts
-- `sync-async-bridge-hazard` for clearly identifiable Tokio `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` patterns inside async contexts
+- `blocking-sleep-in-async` for direct `std::thread::sleep(...)` calls and module aliases imported from `std::thread` inside async functions, async impl methods, nested async blocks, and async closures
+- `blocking-std-api-in-async` for a narrow allowlist of direct `std::fs` calls and module aliases imported from `std::fs` inside the same async contexts
+- `sync-async-bridge-hazard` for clearly identifiable Tokio `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` patterns inside async contexts, including imported type aliases and simple receiver wrappers such as `unwrap`, `expect`, `clone`, and references
 
 Deliberately not shipped in Phase 2:
 
@@ -200,7 +200,7 @@ Deliberately not shipped in Phase 2:
 
 ### Phase 3 - Explain Mode
 
-Status: `[ ] Not started`
+Status: `[x] Complete`
 
 Goals:
 
@@ -208,12 +208,12 @@ Goals:
 
 Checklist:
 
-- [ ] Add `cargo async-doctor explain <check-id>`
-- [ ] Define canonical explain content format
-- [ ] Ensure every shipped check has explain content
-- [ ] Support both human and machine-readable references to check IDs
-- [ ] Link explanations to deeper guide material where appropriate
-- [ ] Add tests for unknown and known check IDs
+- [x] Add `cargo async-doctor explain <check-id>`
+- [x] Define canonical explain content format
+- [x] Ensure every shipped check has explain content
+- [x] Support both human and machine-readable references to check IDs
+- [x] Link explanations to deeper guide material where appropriate
+- [x] Add tests for unknown and known check IDs
 
 Exit criteria:
 
@@ -326,14 +326,18 @@ A task is not done unless:
 - Replaced the placeholder scan with a syntax-driven analyzer that scans the selected manifest's `src/` tree while keeping detection logic separate from rendering
 - Added positive and negative fixtures for each shipped check plus structured JSON assertions for the Phase 2 output contract
 - Documented shipped scope limits, including that `--workspace` does not yet expand workspace members and that `guard-across-await` remains intentionally unshipped in this phase
+- Phase 3 completed with `cargo async-doctor explain <check-id>` plus separate human and JSON explain renderers
+- Defined a canonical explain shape with `title`, `summary`, `detects`, `does_not_detect`, `suggested_fixes`, and `references`
+- Added explain coverage for every shipped Phase 2 check plus known/unknown check ID tests
+- Updated the shipped check descriptions to match the actual alias and async-context detection scope
 
 ## Next Recommended Work
 
-When starting a fresh engineering session, begin with `Phase 3 - Explain Mode`.
+When starting a fresh engineering session, begin with `Phase 4 - Workspace And Path Fidelity`.
 
 Suggested order:
 
-1. add `cargo async-doctor explain <check-id>` using the Phase 2 explanation text as the starting corpus
-2. define the canonical explain output format and tests for known and unknown IDs
-3. keep explain content aligned with the exact detection scope shipped in Phase 2
-4. defer workspace/path fidelity until Phase 4 rather than quietly expanding the current scan scope
+1. add multi-crate workspace fixtures before changing scan behavior
+2. keep package and path fidelity improvements separate from new diagnostic ideas
+3. improve file and optional span reporting without changing the shipped check IDs
+4. defer broader lint-surface expansion until after workspace fidelity is dependable

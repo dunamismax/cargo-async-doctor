@@ -97,6 +97,7 @@ mod tests {
     fn scan_returns_real_report_for_safe_fixture() {
         let cli = Cli {
             message_format: MessageFormat::Human,
+            command: None,
             workspace: false,
             manifest_path: Some(PathBuf::from("fixtures/placeholder/minimal-bin/Cargo.toml")),
         };
@@ -118,6 +119,7 @@ mod tests {
     fn scan_emits_workspace_note_without_expanding_workspace_members() {
         let cli = Cli {
             message_format: MessageFormat::Human,
+            command: None,
             workspace: true,
             manifest_path: Some(PathBuf::from(
                 "fixtures/phase2/blocking-sleep-positive/Cargo.toml",

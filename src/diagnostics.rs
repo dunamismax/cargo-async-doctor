@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::Serialize;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
@@ -32,6 +34,15 @@ impl CheckId {
         }
     }
 
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::BlockingSleepInAsync => "Blocking sleep in async contexts",
+            Self::BlockingStdApiInAsync => "Blocking std::fs APIs in async contexts",
+            Self::SyncAsyncBridgeHazard => "Sync/async bridge hazards in async contexts",
+            Self::GuardAcrossAwait => "Guard held across .await",
+        }
+    }
+
     pub const fn explanation(self) -> &'static str {
         match self {
             Self::BlockingSleepInAsync => {
@@ -62,6 +73,18 @@ impl CheckId {
             ),
             Self::GuardAcrossAwait => None,
         }
+    }
+
+    pub fn from_str_name(input: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|id| id.as_str() == input)
+    }
+}
+
+impl FromStr for CheckId {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_str_name(s).ok_or(())
     }
 }
 
@@ -133,8 +156,18 @@ mod tests {
     #[test]
     fn phase_two_checks_have_explanations_and_help() {
         for id in CheckId::PHASE_TWO_SHIPPED {
+            assert!(!id.title().is_empty());
             assert!(!id.explanation().is_empty());
             assert!(id.help().is_some());
         }
+    }
+
+    #[test]
+    fn parses_stable_check_ids_from_strings() {
+        assert_eq!(
+            CheckId::from_str_name("blocking-sleep-in-async"),
+            Some(CheckId::BlockingSleepInAsync)
+        );
+        assert_eq!(CheckId::from_str_name("unknown-check"), None);
     }
 }

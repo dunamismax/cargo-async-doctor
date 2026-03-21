@@ -4,7 +4,7 @@ mod support;
 use cargo_async_doctor::{
     cli::{Cli, MessageFormat},
     diagnostics::CheckId,
-    render, scan,
+    explain, render, scan,
 };
 use serde_json::Value;
 
@@ -13,6 +13,7 @@ fn scan_fixture(name: &str) -> cargo_async_doctor::diagnostics::ScanReport {
 
     let cli = Cli {
         message_format: MessageFormat::Human,
+        command: None,
         workspace: false,
         manifest_path: Some(manifest_path),
     };
@@ -33,6 +34,7 @@ fn placeholder_fixture_scans_cleanly() {
     let manifest_path = support::fixture_root("placeholder/minimal-bin").join("Cargo.toml");
     let cli = Cli {
         message_format: MessageFormat::Human,
+        command: None,
         workspace: false,
         manifest_path: Some(manifest_path.clone()),
     };
@@ -119,7 +121,7 @@ fn sync_async_bridge_negative_fixture_filters_local_lookalikes() {
 #[test]
 fn json_output_for_phase_two_fixture_is_structured() {
     let report = scan_fixture("phase2/blocking-std-api-positive");
-    let rendered = render::render_report(MessageFormat::Json, &report).unwrap();
+    let rendered = render::render_scan_report(MessageFormat::Json, &report).unwrap();
     let value: Value = serde_json::from_str(&rendered).unwrap();
 
     assert_eq!(value["schema_version"], 1);
@@ -133,4 +135,27 @@ fn json_output_for_phase_two_fixture_is_structured() {
         value["diagnostics"][0]["severity"],
         Value::String("warning".to_string())
     );
+}
+
+#[test]
+fn explain_reports_known_phase_two_check_in_json() {
+    let report = explain::explain("sync-async-bridge-hazard");
+    let rendered = render::render_explain_report(MessageFormat::Json, &report).unwrap();
+    let value: Value = serde_json::from_str(&rendered).unwrap();
+
+    assert_eq!(value["found"], true);
+    assert_eq!(value["requested_check_id"], "sync-async-bridge-hazard");
+    assert_eq!(value["explanation"]["id"], "sync-async-bridge-hazard");
+    assert!(value["explanation"]["references"].is_array());
+}
+
+#[test]
+fn explain_reports_unknown_check_id_in_json() {
+    let report = explain::explain("unknown-check-id");
+    let rendered = render::render_explain_report(MessageFormat::Json, &report).unwrap();
+    let value: Value = serde_json::from_str(&rendered).unwrap();
+
+    assert_eq!(value["found"], false);
+    assert_eq!(value["error"], "unknown-check-id");
+    assert_eq!(value["explanation"], Value::Null);
 }

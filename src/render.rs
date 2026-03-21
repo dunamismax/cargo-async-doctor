@@ -2,15 +2,26 @@ use anyhow::Result;
 
 use crate::cli::MessageFormat;
 use crate::diagnostics::ScanReport;
+use crate::explain::ExplainReport;
 
-pub fn render_report(message_format: MessageFormat, report: &ScanReport) -> Result<String> {
+pub fn render_scan_report(message_format: MessageFormat, report: &ScanReport) -> Result<String> {
     match message_format {
-        MessageFormat::Human => Ok(render_human(report)),
+        MessageFormat::Human => Ok(render_human_scan(report)),
         MessageFormat::Json => Ok(serde_json::to_string_pretty(report)?),
     }
 }
 
-fn render_human(report: &ScanReport) -> String {
+pub fn render_explain_report(
+    message_format: MessageFormat,
+    report: &ExplainReport,
+) -> Result<String> {
+    match message_format {
+        MessageFormat::Human => Ok(render_human_explain(report)),
+        MessageFormat::Json => Ok(serde_json::to_string_pretty(report)?),
+    }
+}
+
+fn render_human_scan(report: &ScanReport) -> String {
     let target = report
         .target
         .manifest_path
@@ -47,12 +58,58 @@ fn render_human(report: &ScanReport) -> String {
     output
 }
 
+fn render_human_explain(report: &ExplainReport) -> String {
+    let mut output = String::from("cargo-async-doctor explain\n");
+    output.push_str(&format!("schema-version: {}\n", report.schema_version));
+    output.push_str(&format!(
+        "requested-check-id: {}\n",
+        report.requested_check_id
+    ));
+
+    if let Some(explanation) = &report.explanation {
+        output.push_str(&format!("title: {}\n", explanation.title));
+        output.push_str(&format!("found: {}\n", report.found));
+        output.push_str("\nSummary:\n");
+        output.push_str(explanation.summary);
+        output.push('\n');
+
+        output.push_str("\nThis check currently detects:\n");
+        for entry in &explanation.detects {
+            output.push_str(&format!("- {entry}\n"));
+        }
+
+        output.push_str("\nThis check does not currently detect:\n");
+        for entry in &explanation.does_not_detect {
+            output.push_str(&format!("- {entry}\n"));
+        }
+
+        output.push_str("\nSuggested fix paths:\n");
+        for entry in &explanation.suggested_fixes {
+            output.push_str(&format!("- {entry}\n"));
+        }
+
+        output.push_str("\nReferences:\n");
+        for reference in &explanation.references {
+            output.push_str(&format!("- {}: {}\n", reference.label, reference.url));
+        }
+    } else {
+        output.push_str(&format!("found: {}\n", report.found));
+        output.push_str("\nUnknown check ID. Known shipped check IDs:\n");
+        for check_id in &report.known_check_ids {
+            output.push_str(&format!("- {check_id}\n"));
+        }
+    }
+
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cli::MessageFormat;
-    use crate::diagnostics::{ScanReport, ScanSummary, ScanTarget};
+    use crate::diagnostics::{CheckId, ScanReport, ScanSummary, ScanTarget};
+    use crate::explain::explain;
 
-    use super::render_report;
+    use super::{render_explain_report, render_scan_report};
 
     fn placeholder_report() -> ScanReport {
         ScanReport {
@@ -73,7 +130,7 @@ mod tests {
 
     #[test]
     fn renders_human_placeholder_report() {
-        let rendered = render_report(MessageFormat::Human, &placeholder_report()).unwrap();
+        let rendered = render_scan_report(MessageFormat::Human, &placeholder_report()).unwrap();
 
         assert!(rendered.contains("cargo-async-doctor"));
         assert!(rendered.contains("mode: placeholder scan"));
@@ -83,10 +140,44 @@ mod tests {
 
     #[test]
     fn renders_json_placeholder_report() {
-        let rendered = render_report(MessageFormat::Json, &placeholder_report()).unwrap();
+        let rendered = render_scan_report(MessageFormat::Json, &placeholder_report()).unwrap();
 
         assert!(rendered.contains("\"schema_version\": 1"));
         assert!(rendered.contains("\"placeholder\": true"));
         assert!(rendered.contains("\"diagnostics\": []"));
+    }
+
+    #[test]
+    fn renders_known_explain_report_for_humans() {
+        let report = explain("blocking-sleep-in-async");
+        let rendered = render_explain_report(MessageFormat::Human, &report).unwrap();
+
+        assert!(rendered.contains("cargo-async-doctor explain"));
+        assert!(rendered.contains("requested-check-id: blocking-sleep-in-async"));
+        assert!(rendered.contains("Summary:"));
+        assert!(rendered.contains("This check currently detects:"));
+        assert!(rendered.contains("Suggested fix paths:"));
+        assert!(rendered.contains("References:"));
+    }
+
+    #[test]
+    fn renders_unknown_explain_report_in_json() {
+        let report = explain("not-a-real-check");
+        let rendered = render_explain_report(MessageFormat::Json, &report).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+
+        assert_eq!(value["found"], serde_json::Value::Bool(false));
+        assert_eq!(
+            value["error"],
+            serde_json::Value::String("unknown-check-id".to_string())
+        );
+        assert_eq!(
+            value["known_check_ids"],
+            serde_json::json!([
+                CheckId::BlockingSleepInAsync.as_str(),
+                CheckId::BlockingStdApiInAsync.as_str(),
+                CheckId::SyncAsyncBridgeHazard.as_str(),
+            ])
+        );
     }
 }

@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::{error::ErrorKind, Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, ValueEnum)]
@@ -10,6 +10,18 @@ pub enum MessageFormat {
     #[default]
     Human,
     Json,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Subcommand)]
+pub enum Command {
+    /// Explain a shipped check ID and its current detection scope.
+    Explain(ExplainCommand),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Args)]
+pub struct ExplainCommand {
+    /// Stable check ID to explain.
+    pub check_id: String,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq)]
@@ -21,14 +33,17 @@ pub enum MessageFormat {
 )]
 pub struct Cli {
     /// Emit results as human-readable text or structured JSON.
-    #[arg(long, value_enum, default_value_t)]
+    #[arg(long, global = true, value_enum, default_value_t)]
     pub message_format: MessageFormat,
 
-    /// Scan the full Cargo workspace when supported.
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
+    /// When scanning, inspect the full Cargo workspace once workspace support lands.
     #[arg(long)]
     pub workspace: bool,
 
-    /// Path to a Cargo.toml manifest to inspect.
+    /// When scanning, use a specific Cargo.toml manifest path.
     #[arg(long, value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
 }
@@ -38,7 +53,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString>,
 {
-    Cli::try_parse_from(normalize_cargo_subcommand_args(args))
+    let cli = Cli::try_parse_from(normalize_cargo_subcommand_args(args))?;
+    validate_cli(cli)
 }
 
 fn normalize_cargo_subcommand_args<I, T>(args: I) -> Vec<OsString>
@@ -55,9 +71,26 @@ where
     normalized
 }
 
+fn validate_cli(cli: Cli) -> Result<Cli, clap::Error> {
+    if matches!(cli.command, Some(Command::Explain(_)))
+        && (cli.workspace || cli.manifest_path.is_some())
+    {
+        return Err(clap::Error::raw(
+            ErrorKind::ArgumentConflict,
+            "`--workspace` and `--manifest-path` are scan-only options and cannot be used with `explain`.",
+        ));
+    }
+
+    Ok(cli)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{try_parse_from, Cli, MessageFormat};
+    use std::path::PathBuf;
+
+    use clap::error::ErrorKind;
+
+    use super::{try_parse_from, Cli, Command, ExplainCommand, MessageFormat};
 
     #[test]
     fn parses_direct_binary_invocation() {
@@ -67,6 +100,7 @@ mod tests {
             cli,
             Cli {
                 message_format: MessageFormat::Json,
+                command: None,
                 workspace: false,
                 manifest_path: None,
             }
@@ -88,8 +122,71 @@ mod tests {
             cli,
             Cli {
                 message_format: MessageFormat::Human,
+                command: None,
                 workspace: true,
                 manifest_path: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_explain_subcommand_via_cargo_style_invocation() {
+        let cli = try_parse_from([
+            "cargo-async-doctor",
+            "async-doctor",
+            "explain",
+            "blocking-sleep-in-async",
+            "--message-format",
+            "json",
+        ])
+        .unwrap();
+
+        assert_eq!(
+            cli,
+            Cli {
+                message_format: MessageFormat::Json,
+                command: Some(Command::Explain(ExplainCommand {
+                    check_id: "blocking-sleep-in-async".to_string(),
+                })),
+                workspace: false,
+                manifest_path: None,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_scan_only_flags_for_explain() {
+        let error = try_parse_from([
+            "cargo-async-doctor",
+            "--manifest-path",
+            "fixtures/placeholder/minimal-bin/Cargo.toml",
+            "explain",
+            "blocking-sleep-in-async",
+        ])
+        .unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
+        assert!(error
+            .to_string()
+            .contains("scan-only options and cannot be used with `explain`"));
+    }
+
+    #[test]
+    fn preserves_manifest_path_for_scan_mode() {
+        let cli = try_parse_from([
+            "cargo-async-doctor",
+            "--manifest-path",
+            "fixtures/placeholder/minimal-bin/Cargo.toml",
+        ])
+        .unwrap();
+
+        assert_eq!(
+            cli,
+            Cli {
+                message_format: MessageFormat::Human,
+                command: None,
+                workspace: false,
+                manifest_path: Some(PathBuf::from("fixtures/placeholder/minimal-bin/Cargo.toml",)),
             }
         );
     }
