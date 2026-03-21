@@ -6,6 +6,8 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-21
+
 ### Docs
 
 - finalized the post-release repository docs and removed the stale `BUILD.md` phase tracker
