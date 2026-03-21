@@ -11,23 +11,24 @@ The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal 
 
 ## Status
 
-Phase 1: CLI Bootstrap is now implemented.
+Phase 2: First Trustworthy Checks is now implemented.
 
 The repository currently provides:
 
 - a runnable `cargo-async-doctor` binary crate
-- a stable CLI argument model for placeholder scans
-- a diagnostics model with stable check IDs reserved in code
+- a stable CLI argument model for scanning a selected manifest
+- a diagnostics model with stable check IDs and shipped explanation text
+- three real Phase 2 diagnostics backed by positive and negative fixtures
 - separate human-readable and JSON renderers
-- baseline unit tests, fixture scaffolding, and CI
+- structured output tests, unit tests, fixture tests, and CI
 
 What it does **not** provide yet:
 
-- real async misuse detection
-- per-check explanation content
 - `explain` mode
+- full workspace and span fidelity
+- the reserved `guard-across-await` check, which stays out of Phase 2 because a syntax-only version would be too noisy
 
-Those land in Phase 2 and Phase 3, as tracked in [`BUILD.md`](BUILD.md).
+Those remain tracked in [`BUILD.md`](BUILD.md).
 
 ## Available Today
 
@@ -41,18 +42,26 @@ cargo async-doctor --workspace
 cargo async-doctor --manifest-path ./Cargo.toml
 ```
 
-Current behavior is intentionally small: the scan flow succeeds, emits no diagnostics, and clearly marks itself as a Phase 1 placeholder.
+Current behavior is intentionally narrow: the scan analyzes Rust files under the selected manifest's `src/` tree, emits only shipped Phase 2 diagnostics, and keeps rendering separate from detection.
 
-## Planned Focus Areas
+## Shipped Phase 2 Checks
 
-The first real checks should stay narrow and trustworthy:
+- `blocking-sleep-in-async`
+  Detects direct `std::thread::sleep(...)` calls, plus `thread::sleep(...)` when `thread` is imported from `std::thread`, inside `async fn` bodies or nested `async { ... }` blocks.
+- `blocking-std-api-in-async`
+  Detects direct blocking `std::fs` calls inside async contexts for this allowlist:
+  `canonicalize`, `copy`, `create_dir`, `create_dir_all`, `metadata`, `read`, `read_dir`, `read_link`, `read_to_string`, `remove_dir`, `remove_dir_all`, `remove_file`, `rename`, `symlink_metadata`, and `write`.
+  The same calls are also detected as `fs::...` when `fs` is imported from `std::fs`.
+- `sync-async-bridge-hazard`
+  Detects `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` style Tokio bridges inside async contexts when the receiver is clearly `tokio::runtime::Handle` or `tokio::runtime::Runtime`.
 
-- blocking work inside async contexts
-- risky sync/async bridging patterns
-- guard-across-`.await` hazards
-- Tokio-specific runtime footguns where clear guidance exists
+## Current Limits
 
-The first release should favor a small number of trustworthy checks over broad but noisy coverage.
+- Phase 2 scans only the selected manifest's `src/` tree.
+- `--workspace` is accepted, but it does not yet expand workspace members or improve package selection.
+- Detection is syntax-driven. It does not resolve macros, re-exports, wildcard imports, or local `use` statements inside blocks.
+- Messages include the relative file path, but Phase 2 does not yet report spans or line numbers.
+- `guard-across-await` remains reserved but intentionally unshipped until the project has stronger type/context handling.
 
 ## Non-Goals
 
@@ -69,6 +78,7 @@ The first release should favor a small number of trustworthy checks over broad b
 - runtime-specific guidance should be clearly labeled
 - output rendering stays separate from detection logic
 - examples and docs should be developed in lockstep with checks
+- if a check cannot be made trustworthy yet, leave it out
 
 ## Relationship To `rust-async-field-guide`
 
@@ -106,7 +116,7 @@ Notes:
 ## Project Docs
 
 - [`BUILD.md`](BUILD.md) is the canonical build plan and status tracker.
-- [`fixtures/README.md`](fixtures/README.md) documents the initial fixture test scaffolding.
+- [`fixtures/README.md`](fixtures/README.md) documents the shipped Phase 2 fixture set.
 
 ## License
 

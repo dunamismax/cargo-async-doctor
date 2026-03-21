@@ -66,6 +66,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "syn",
 ]
 
 [[package]]

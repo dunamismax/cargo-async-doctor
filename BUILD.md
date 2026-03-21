@@ -26,9 +26,9 @@ The product bar is not “many warnings.” The product bar is:
 ## Current Status
 
 - Current phase: `Phase 2 - First Trustworthy Checks`
-- Repository maturity: `Phase 1 CLI skeleton implemented; real diagnostics not started`
-- Public promise today: runnable CLI skeleton with stable output model, test harness, and CI scaffold
-- Public promise after Phase 2: first real async diagnostics with fixture coverage and actionable wording
+- Repository maturity: `Phase 2 checks implemented with fixture coverage; explain mode and workspace fidelity not started`
+- Public promise today: first real async diagnostics with stable IDs, actionable wording, and fixture-backed false-positive control
+- Public promise after Phase 2: narrow trustworthy checks only; broader explain/workspace features remain separate phases
 
 ## Operating Rules
 
@@ -162,7 +162,7 @@ Exit criteria:
 
 ### Phase 2 - First Trustworthy Checks
 
-Status: `[ ] Not started`
+Status: `[x] Complete`
 
 Goals:
 
@@ -171,22 +171,32 @@ Goals:
 
 Checklist:
 
-- [ ] Implement blocking sleep detection
-- [ ] Implement obvious blocking std API detection in async contexts
-- [ ] Implement at least one documented sync/async bridge hazard check
-- [ ] Assign stable IDs to each check
-- [ ] Write explanation text for each check
-- [ ] Add positive fixtures for each check
-- [ ] Add negative fixtures for false-positive control
-- [ ] Add snapshot or structured output tests
-- [ ] Update `README.md` with exact MVP check list
-- [ ] Record known limitations for each shipped check
+- [x] Implement blocking sleep detection
+- [x] Implement obvious blocking std API detection in async contexts
+- [x] Implement at least one documented sync/async bridge hazard check
+- [x] Assign stable IDs to each check
+- [x] Write explanation text for each check
+- [x] Add positive fixtures for each check
+- [x] Add negative fixtures for false-positive control
+- [x] Add snapshot or structured output tests
+- [x] Update `README.md` with exact MVP check list
+- [x] Record known limitations for each shipped check
 
 Exit criteria:
 
 - at least 2-3 real checks are shippable
 - checks are backed by fixtures
 - warnings are actionable and documented
+
+Shipped scope:
+
+- `blocking-sleep-in-async` for `std::thread::sleep(...)` and `thread::sleep(...)` when `thread` is imported from `std::thread`
+- `blocking-std-api-in-async` for a narrow allowlist of direct `std::fs` and imported `fs::...` calls inside async contexts
+- `sync-async-bridge-hazard` for clearly identifiable Tokio `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` patterns inside async contexts
+
+Deliberately not shipped in Phase 2:
+
+- `guard-across-await` remains reserved only; a syntax-only implementation would be too noisy without stronger type/context handling
 
 ### Phase 3 - Explain Mode
 
@@ -312,15 +322,18 @@ A task is not done unless:
 - Added separate human-readable and JSON renderers plus baseline unit and fixture-scaffolding tests
 - Added GitHub Actions CI for `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`
 - Updated `README.md` and this build tracker to match the implemented Phase 1 state
+- Phase 2 completed with three shipped checks: blocking sleep in async contexts, a narrow allowlist of blocking `std::fs` calls in async contexts, and clearly identifiable Tokio `block_on` bridge hazards
+- Replaced the placeholder scan with a syntax-driven analyzer that scans the selected manifest's `src/` tree while keeping detection logic separate from rendering
+- Added positive and negative fixtures for each shipped check plus structured JSON assertions for the Phase 2 output contract
+- Documented shipped scope limits, including that `--workspace` does not yet expand workspace members and that `guard-across-await` remains intentionally unshipped in this phase
 
 ## Next Recommended Work
 
-When starting a fresh engineering session, begin with `Phase 2 - First Trustworthy Checks`.
+When starting a fresh engineering session, begin with `Phase 3 - Explain Mode`.
 
 Suggested order:
 
-1. implement blocking sleep detection with positive and negative fixtures
-2. add at least one more high-confidence async hazard check
-3. tighten warning wording and explanation text alongside each check
-4. add structured output assertions for real diagnostics
-5. update this BUILD file as tasks complete
+1. add `cargo async-doctor explain <check-id>` using the Phase 2 explanation text as the starting corpus
+2. define the canonical explain output format and tests for known and unknown IDs
+3. keep explain content aligned with the exact detection scope shipped in Phase 2
+4. defer workspace/path fidelity until Phase 4 rather than quietly expanding the current scan scope
