@@ -101,17 +101,43 @@ pub enum Severity {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct DiagnosticPackage {
+    pub name: String,
+    pub manifest_path: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct DiagnosticLocation {
+    pub file_path: String,
+    pub package_path: String,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+    pub end_line: Option<usize>,
+    pub end_column: Option<usize>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct Diagnostic {
     pub id: CheckId,
     pub severity: Severity,
+    pub package: DiagnosticPackage,
+    pub location: DiagnosticLocation,
     pub message: String,
     pub help: Option<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct ScanPackageTarget {
+    pub name: String,
+    pub manifest_path: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct ScanTarget {
     pub workspace: bool,
     pub manifest_path: Option<String>,
+    pub workspace_root: Option<String>,
+    pub packages: Vec<ScanPackageTarget>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]

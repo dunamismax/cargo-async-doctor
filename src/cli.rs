@@ -39,7 +39,7 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    /// When scanning, inspect the full Cargo workspace once workspace support lands.
+    /// When scanning, inspect the full Cargo workspace instead of the selected package or default members.
     #[arg(long)]
     pub workspace: bool,
 

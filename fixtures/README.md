@@ -9,4 +9,9 @@ Phase 2 ships focused fixtures for the first trustworthy checks:
 - `phase2/blocking-std-api-positive` and `phase2/blocking-std-api-negative` cover the narrow blocking `std::fs` allowlist and lookalike filtering.
 - `phase2/sync-async-bridge-positive` and `phase2/sync-async-bridge-negative` cover clearly identifiable Tokio `block_on` bridge hazards and local lookalikes.
 
+Phase 4 adds workspace-focused fixtures:
+
+- `phase4/workspace-root-package` is a multi-crate workspace whose root is also a package. It covers root-package scans, workspace-member scans, and `--workspace` expansion across the root package plus members.
+- `phase4/virtual-workspace` is a virtual workspace with explicit `default-members`. It proves that scanning the workspace manifest without `--workspace` stays on default members, while the same manifest can expand to all members when `--workspace` is used.
+
 Keep fixtures small, explicit, and check-specific. Add positive and negative cases together so false-positive control evolves with each shipped diagnostic.

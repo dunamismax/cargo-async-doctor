@@ -9,12 +9,19 @@ use cargo_async_doctor::{
 use serde_json::Value;
 
 fn scan_fixture(name: &str) -> cargo_async_doctor::diagnostics::ScanReport {
+    scan_fixture_with_workspace(name, false)
+}
+
+fn scan_fixture_with_workspace(
+    name: &str,
+    workspace: bool,
+) -> cargo_async_doctor::diagnostics::ScanReport {
     let manifest_path = support::fixture_root(name).join("Cargo.toml");
 
     let cli = Cli {
         message_format: MessageFormat::Human,
         command: None,
-        workspace: false,
+        workspace,
         manifest_path: Some(manifest_path),
     };
 
@@ -44,6 +51,8 @@ fn placeholder_fixture_scans_cleanly() {
     assert!(!report.placeholder);
     assert!(report.diagnostics.is_empty());
     assert_eq!(report.summary.total, 0);
+    assert_eq!(report.target.packages.len(), 1);
+    assert_eq!(report.target.packages[0].name, "fixture-minimal-bin");
     assert_eq!(
         report.target.manifest_path.as_deref(),
         Some(manifest_path.to_string_lossy().as_ref())
@@ -58,6 +67,8 @@ fn blocking_sleep_positive_fixture_emits_stable_check() {
     assert_eq!(report.diagnostics.len(), 1);
     assert_eq!(report.diagnostics[0].id, CheckId::BlockingSleepInAsync);
     assert!(report.diagnostics[0].message.contains("thread::sleep"));
+    assert_eq!(report.diagnostics[0].location.file_path, "src/main.rs");
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
     assert!(report.diagnostics[0]
         .help
         .as_deref()
@@ -80,6 +91,8 @@ fn blocking_std_api_positive_fixture_emits_stable_check() {
     assert_eq!(report.diagnostics.len(), 1);
     assert_eq!(report.diagnostics[0].id, CheckId::BlockingStdApiInAsync);
     assert!(report.diagnostics[0].message.contains("fs::read_to_string"));
+    assert_eq!(report.diagnostics[0].location.file_path, "src/main.rs");
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
     assert!(report.diagnostics[0]
         .help
         .as_deref()
@@ -104,6 +117,8 @@ fn sync_async_bridge_positive_fixture_emits_stable_check() {
     assert!(report.diagnostics[0]
         .message
         .contains("Handle::current().block_on"));
+    assert_eq!(report.diagnostics[0].location.file_path, "src/main.rs");
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
     assert!(report.diagnostics[0]
         .help
         .as_deref()
@@ -119,14 +134,114 @@ fn sync_async_bridge_negative_fixture_filters_local_lookalikes() {
 }
 
 #[test]
-fn json_output_for_phase_two_fixture_is_structured() {
-    let report = scan_fixture("phase2/blocking-std-api-positive");
+fn workspace_root_package_fixture_scans_only_root_package_by_default() {
+    let report = scan_fixture("phase4/workspace-root-package");
+
+    assert_eq!(report.summary.warnings, 1);
+    assert_eq!(report.target.packages.len(), 1);
+    assert_eq!(report.target.packages[0].name, "workspace-root-package");
+    assert_eq!(report.diagnostics[0].package.name, "workspace-root-package");
+    assert_eq!(report.diagnostics[0].location.file_path, "src/main.rs");
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
+}
+
+#[test]
+fn workspace_member_manifest_scans_only_that_member() {
+    let manifest_path = support::fixture_root("phase4/workspace-root-package")
+        .join("member-bin")
+        .join("Cargo.toml");
+    let cli = Cli {
+        message_format: MessageFormat::Human,
+        command: None,
+        workspace: false,
+        manifest_path: Some(manifest_path),
+    };
+
+    let report = scan::scan(&cli).unwrap();
+
+    assert_eq!(report.summary.warnings, 1);
+    assert_eq!(report.target.packages.len(), 1);
+    assert_eq!(report.target.packages[0].name, "member-bin");
+    assert_eq!(report.diagnostics[0].package.name, "member-bin");
+    assert_eq!(
+        report.diagnostics[0].location.file_path,
+        "member-bin/src/main.rs"
+    );
+    assert_eq!(report.diagnostics[0].id, CheckId::BlockingStdApiInAsync);
+}
+
+#[test]
+fn workspace_flag_scans_all_workspace_members_and_root_package() {
+    let report = scan_fixture_with_workspace("phase4/workspace-root-package", true);
+
+    assert_eq!(report.summary.warnings, 3);
+    assert_eq!(
+        report
+            .target
+            .packages
+            .iter()
+            .map(|package| package.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["member-lib", "member-bin", "workspace-root-package"]
+    );
+    assert_eq!(
+        report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.package.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["member-bin", "member-lib", "workspace-root-package"]
+    );
+    assert_eq!(
+        report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.location.file_path.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "member-bin/src/main.rs",
+            "member-lib/src/lib.rs",
+            "src/main.rs"
+        ]
+    );
+}
+
+#[test]
+fn virtual_workspace_manifest_scans_default_members_without_workspace_flag() {
+    let report = scan_fixture("phase4/virtual-workspace");
+
+    assert_eq!(report.summary.warnings, 1);
+    assert_eq!(report.target.packages.len(), 1);
+    assert_eq!(report.target.packages[0].name, "default-member");
+    assert_eq!(report.diagnostics[0].package.name, "default-member");
+    assert_eq!(
+        report.diagnostics[0].location.file_path,
+        "default-member/src/main.rs"
+    );
+    assert!(report
+        .notes
+        .iter()
+        .any(|note| note.contains("default workspace members only")));
+}
+
+#[test]
+fn json_output_for_workspace_fixture_is_structured() {
+    let report = scan_fixture_with_workspace("phase4/workspace-root-package", true);
     let rendered = render::render_scan_report(MessageFormat::Json, &report).unwrap();
     let value: Value = serde_json::from_str(&rendered).unwrap();
 
     assert_eq!(value["schema_version"], 1);
     assert_eq!(value["placeholder"], false);
-    assert_eq!(value["summary"]["warnings"], 1);
+    assert_eq!(value["summary"]["warnings"], 3);
+    assert_eq!(
+        value["diagnostics"][0]["package"]["name"],
+        Value::String("member-bin".to_string())
+    );
+    assert_eq!(
+        value["diagnostics"][0]["location"]["file_path"],
+        Value::String("member-bin/src/main.rs".to_string())
+    );
+    assert_eq!(value["diagnostics"][0]["location"]["line"], 4);
     assert_eq!(
         value["diagnostics"][0]["id"],
         Value::String(CheckId::BlockingStdApiInAsync.as_str().to_string())

@@ -11,7 +11,7 @@ The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal 
 
 ## Status
 
-Phase 3: Explain Mode is now implemented.
+Phase 4: Workspace And Path Fidelity is now implemented.
 
 The repository currently provides:
 
@@ -20,13 +20,16 @@ The repository currently provides:
 - a diagnostics model with stable check IDs
 - canonical explain content for every shipped Phase 2 check
 - three real Phase 2 diagnostics backed by positive and negative fixtures
+- Cargo metadata-driven package selection for package manifests, root-package workspaces, and virtual workspace manifests
 - separate human-readable and JSON renderers for both scan and explain output
+- package-aware diagnostics with workspace-relative file paths plus optional line and column reporting when a syntax span is available
 - structured output tests, unit tests, fixture tests, and CI
 
 What it does **not** provide yet:
 
-- full workspace and span fidelity
 - the reserved `guard-across-await` check, which stays out of the shipped surface because a syntax-only version would be too noisy
+- deep name resolution for macros, re-exports, wildcard imports, stored runtime handles, or block-local `use` items
+- guarantees that every future location will have a span; line and column data are best-effort and tied to direct syntax matches
 
 Those remain tracked in [`BUILD.md`](BUILD.md).
 
@@ -46,7 +49,11 @@ cargo async-doctor --message-format json explain blocking-sleep-in-async
 
 Current behavior is intentionally narrow:
 
-- scan mode analyzes Rust files under the selected manifest's `src/` tree and emits only shipped diagnostics
+- scan mode resolves package selection through `cargo metadata`
+- package manifests scan that package only unless `--workspace` is set
+- virtual workspace manifests scan default members by default and all workspace members with `--workspace`
+- diagnostics include package context plus workspace-relative file paths when available
+- line and column fields are included when the syntax pass can attach a direct source span
 - explain mode serves canonical shipped-check content by stable check ID
 - rendering stays separate from both detection and explain-content selection
 
@@ -60,6 +67,19 @@ Current behavior is intentionally narrow:
   The same calls are also detected through module aliases imported from `std::fs`.
 - `sync-async-bridge-hazard`
   Detects `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` style Tokio bridges inside async contexts when the receiver is clearly `tokio::runtime::Handle` or `tokio::runtime::Runtime`, including imported type aliases and simple receiver wrappers such as `unwrap`, `expect`, `clone`, and references.
+
+## Scan Output Shape
+
+Scan diagnostics now carry:
+
+- stable check IDs
+- package name and package manifest path
+- a display file path, relative to the workspace root when possible
+- a package-relative path
+- optional line and column fields
+- human-readable messages and help text
+
+The human renderer also lists the selected packages so workspace scans stay understandable.
 
 ## Explain Output Format
 
@@ -76,11 +96,11 @@ Unknown IDs return `found: false`, `error: "unknown-check-id"`, and the list of 
 
 ## Current Limits
 
-- Scan mode still analyzes only the selected manifest's `src/` tree.
-- `--workspace` is accepted, but it does not yet expand workspace members or improve package selection.
-- Detection is syntax-driven. It does not resolve macros, re-exports, wildcard imports, or local `use` statements inside blocks.
+- Detection is still syntax-driven. It does not resolve macros, re-exports, wildcard imports, or local `use` statements inside blocks.
+- The shipped checks still match only the narrow documented Phase 2 patterns; Phase 4 improves fidelity, not lint surface area.
+- Sync/async bridge detection still does not follow stored handles or runtimes such as `let handle = Handle::current(); handle.block_on(...)`.
+- Location data is best-effort: line and column fields are present for direct syntax matches, but not for future patterns that may need deeper analysis.
 - Explain mode covers the shipped Phase 2 checks only; `guard-across-await` remains reserved and intentionally unshipped until the project has stronger type/context handling.
-- Messages include the relative file path, but the project does not yet report spans or line numbers.
 
 ## Non-Goals
 
@@ -123,6 +143,10 @@ cargo run -- --message-format human
 cargo run -- --message-format json
 cargo run -- explain blocking-sleep-in-async
 cargo run -- --message-format json explain blocking-sleep-in-async
+cargo run -- --manifest-path fixtures/phase4/workspace-root-package/Cargo.toml
+cargo run -- --workspace --manifest-path fixtures/phase4/workspace-root-package/Cargo.toml
+cargo run -- --manifest-path fixtures/phase4/workspace-root-package/member-bin/Cargo.toml
+cargo run -- --manifest-path fixtures/phase4/virtual-workspace/Cargo.toml
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
@@ -131,14 +155,14 @@ cargo test
 Notes:
 
 - `cargo run -- async-doctor --help` verifies the Cargo-subcommand-style invocation path.
-- The two scan commands exercise both scan renderers.
-- The two explain commands exercise the human and JSON explain renderers.
+- The scan commands exercise both the default manifest selection and the Phase 4 workspace/package selection paths.
+- The explain commands exercise the human and JSON explain renderers.
 - The lint and test commands match the repository CI workflow.
 
 ## Project Docs
 
 - [`BUILD.md`](BUILD.md) is the canonical build plan and status tracker.
-- [`fixtures/README.md`](fixtures/README.md) documents the shipped Phase 2 fixture set.
+- [`fixtures/README.md`](fixtures/README.md) documents the fixture set.
 
 ## License
 

@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use proc_macro2::Span;
+use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
     Expr, ExprAsync, ExprCall, ExprClosure, ExprMethodCall, File, ImplItem, ImplItemFn, Item,
@@ -30,10 +32,49 @@ const BLOCKING_STD_FS_FUNCTIONS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct PackageContext {
+    pub name: String,
+    pub manifest_path: PathBuf,
+    pub root_dir: PathBuf,
+    pub workspace_root: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct SourceSpan {
+    pub start_line: usize,
+    pub start_column: usize,
+    pub end_line: usize,
+    pub end_column: usize,
+}
+
+impl SourceSpan {
+    fn from_syn_span(span: Span) -> Option<Self> {
+        let start = span.start();
+        let end = span.end();
+
+        if start.line == 0 || end.line == 0 {
+            return None;
+        }
+
+        Some(Self {
+            start_line: start.line,
+            start_column: start.column + 1,
+            end_line: end.line,
+            end_column: end.column + 1,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Finding {
     pub id: CheckId,
+    pub package_name: String,
+    pub package_manifest_path: PathBuf,
+    pub package_root: PathBuf,
+    pub workspace_root: PathBuf,
     pub file: PathBuf,
     pub matched: String,
+    pub span: Option<SourceSpan>,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -120,74 +161,82 @@ impl AliasEnv {
     }
 }
 
-pub fn analyze_manifest(manifest_path: &Path, workspace: bool) -> Result<AnalysisResult> {
-    let manifest_dir = manifest_path
-        .parent()
-        .context("manifest path did not have a parent directory")?;
-    let source_dir = manifest_dir.join("src");
-    let mut notes = Vec::new();
-
-    if workspace {
-        notes.push(
-            "Phase 2 accepts `--workspace`, but still scans only the selected manifest's `src/` tree. Full workspace/package fidelity is tracked for Phase 4."
-                .to_string(),
-        );
-    }
+pub fn analyze_package(package: &PackageContext) -> Result<AnalysisResult> {
+    let source_dir = package.root_dir.join("src");
 
     if !source_dir.exists() {
-        notes.push("No `src/` directory was found under the selected manifest.".to_string());
         return Ok(AnalysisResult {
             findings: Vec::new(),
-            notes,
+            notes: vec![format!(
+                "Package `{}` has no `src/` directory under `{}`.",
+                package.name,
+                package.root_dir.display()
+            )],
         });
     }
 
     let mut findings = Vec::new();
 
     for file in rust_files_under(&source_dir)? {
-        findings.extend(analyze_file(&file)?);
+        findings.extend(analyze_file(package, &file)?);
     }
 
     findings.sort_by(|left, right| {
-        left.file
-            .cmp(&right.file)
+        left.package_name
+            .cmp(&right.package_name)
+            .then_with(|| left.file.cmp(&right.file))
             .then_with(|| left.id.as_str().cmp(right.id.as_str()))
             .then_with(|| left.matched.cmp(&right.matched))
     });
 
-    Ok(AnalysisResult { findings, notes })
+    Ok(AnalysisResult {
+        findings,
+        notes: Vec::new(),
+    })
 }
 
-fn analyze_file(path: &Path) -> Result<Vec<Finding>> {
+fn analyze_file(package: &PackageContext, path: &Path) -> Result<Vec<Finding>> {
     let source = fs::read_to_string(path)
         .with_context(|| format!("failed to read Rust source file `{}`", path.display()))?;
     let syntax = syn::parse_file(&source)
         .with_context(|| format!("failed to parse Rust source file `{}`", path.display()))?;
-    Ok(analyze_syntax(path, &syntax))
+    Ok(analyze_syntax(package, path, &syntax))
 }
 
-fn analyze_syntax(path: &Path, syntax: &File) -> Vec<Finding> {
+fn analyze_syntax(package: &PackageContext, path: &Path, syntax: &File) -> Vec<Finding> {
     let mut findings = Vec::new();
-    analyze_items(&syntax.items, &AliasEnv::default(), path, &mut findings);
+    analyze_items(
+        &syntax.items,
+        &AliasEnv::default(),
+        package,
+        path,
+        &mut findings,
+    );
     findings
 }
 
-fn analyze_items(items: &[Item], parent_env: &AliasEnv, file: &Path, findings: &mut Vec<Finding>) {
+fn analyze_items(
+    items: &[Item],
+    parent_env: &AliasEnv,
+    package: &PackageContext,
+    file: &Path,
+    findings: &mut Vec<Finding>,
+) {
     let env = parent_env.extend_from_items(items);
 
     for item in items {
         match item {
-            Item::Fn(function) => analyze_function(function, &env, file, findings),
+            Item::Fn(function) => analyze_function(function, &env, package, file, findings),
             Item::Impl(item_impl) => {
                 for item in &item_impl.items {
                     if let ImplItem::Fn(function) = item {
-                        analyze_impl_function(function, &env, file, findings);
+                        analyze_impl_function(function, &env, package, file, findings);
                     }
                 }
             }
             Item::Mod(item_mod) => {
                 if let Some((_, items)) = &item_mod.content {
-                    analyze_items(items, &env, file, findings);
+                    analyze_items(items, &env, package, file, findings);
                 }
             }
             _ => {}
@@ -195,8 +244,15 @@ fn analyze_items(items: &[Item], parent_env: &AliasEnv, file: &Path, findings: &
     }
 }
 
-fn analyze_function(function: &ItemFn, env: &AliasEnv, file: &Path, findings: &mut Vec<Finding>) {
+fn analyze_function(
+    function: &ItemFn,
+    env: &AliasEnv,
+    package: &PackageContext,
+    file: &Path,
+    findings: &mut Vec<Finding>,
+) {
     let mut visitor = AsyncContextVisitor::new(
+        package,
         file,
         env.clone(),
         findings,
@@ -208,10 +264,12 @@ fn analyze_function(function: &ItemFn, env: &AliasEnv, file: &Path, findings: &m
 fn analyze_impl_function(
     function: &ImplItemFn,
     env: &AliasEnv,
+    package: &PackageContext,
     file: &Path,
     findings: &mut Vec<Finding>,
 ) {
     let mut visitor = AsyncContextVisitor::new(
+        package,
         file,
         env.clone(),
         findings,
@@ -247,6 +305,7 @@ fn visit_dir(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
 }
 
 struct AsyncContextVisitor<'a> {
+    package: &'a PackageContext,
     file: &'a Path,
     env: AliasEnv,
     findings: &'a mut Vec<Finding>,
@@ -255,12 +314,14 @@ struct AsyncContextVisitor<'a> {
 
 impl<'a> AsyncContextVisitor<'a> {
     fn new(
+        package: &'a PackageContext,
         file: &'a Path,
         env: AliasEnv,
         findings: &'a mut Vec<Finding>,
         async_depth: usize,
     ) -> Self {
         Self {
+            package,
             file,
             env,
             findings,
@@ -272,11 +333,16 @@ impl<'a> AsyncContextVisitor<'a> {
         self.async_depth > 0
     }
 
-    fn push_finding(&mut self, id: CheckId, matched: String) {
+    fn push_finding(&mut self, id: CheckId, matched: String, span: Option<SourceSpan>) {
         self.findings.push(Finding {
             id,
+            package_name: self.package.name.clone(),
+            package_manifest_path: self.package.manifest_path.clone(),
+            package_root: self.package.root_dir.clone(),
+            workspace_root: self.package.workspace_root.clone(),
             file: self.file.to_path_buf(),
             matched,
+            span,
         });
     }
 }
@@ -290,6 +356,7 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
 
     fn visit_expr_closure(&mut self, node: &ExprClosure) {
         let mut nested = AsyncContextVisitor::new(
+            self.package,
             self.file,
             self.env.clone(),
             self.findings,
@@ -300,6 +367,7 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
 
     fn visit_item_fn(&mut self, node: &ItemFn) {
         let mut nested = AsyncContextVisitor::new(
+            self.package,
             self.file,
             self.env.clone(),
             self.findings,
@@ -310,16 +378,24 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
 
     fn visit_item_mod(&mut self, node: &ItemMod) {
         if let Some((_, items)) = &node.content {
-            analyze_items(items, &self.env, self.file, self.findings);
+            analyze_items(items, &self.env, self.package, self.file, self.findings);
         }
     }
 
     fn visit_expr_call(&mut self, node: &ExprCall) {
         if self.in_async_context() {
             if let Some(matched) = blocking_sleep_match(&node.func, &self.env) {
-                self.push_finding(CheckId::BlockingSleepInAsync, matched);
+                self.push_finding(
+                    CheckId::BlockingSleepInAsync,
+                    matched,
+                    SourceSpan::from_syn_span(node.span()),
+                );
             } else if let Some(matched) = blocking_std_fs_match(&node.func, &self.env) {
-                self.push_finding(CheckId::BlockingStdApiInAsync, matched);
+                self.push_finding(
+                    CheckId::BlockingStdApiInAsync,
+                    matched,
+                    SourceSpan::from_syn_span(node.span()),
+                );
             }
         }
 
@@ -329,7 +405,11 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
     fn visit_expr_method_call(&mut self, node: &ExprMethodCall) {
         if self.in_async_context() && node.method == "block_on" {
             if let Some(matched) = sync_async_bridge_match(node, &self.env) {
-                self.push_finding(CheckId::SyncAsyncBridgeHazard, matched);
+                self.push_finding(
+                    CheckId::SyncAsyncBridgeHazard,
+                    matched,
+                    SourceSpan::from_syn_span(node.span()),
+                );
             }
         }
 
@@ -470,11 +550,20 @@ fn render_path(path: &SynPath) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use crate::diagnostics::CheckId;
 
-    use super::analyze_syntax;
+    use super::{analyze_syntax, PackageContext};
+
+    fn package_context() -> PackageContext {
+        PackageContext {
+            name: "fixture-package".to_string(),
+            manifest_path: PathBuf::from("Cargo.toml"),
+            root_dir: PathBuf::from("."),
+            workspace_root: PathBuf::from("."),
+        }
+    }
 
     #[test]
     fn reports_direct_paths_and_imported_aliases_inside_async_contexts() {
@@ -492,7 +581,7 @@ mod tests {
         )
         .unwrap();
 
-        let findings = analyze_syntax(Path::new("src/main.rs"), &syntax);
+        let findings = analyze_syntax(&package_context(), Path::new("src/main.rs"), &syntax);
         let ids: Vec<CheckId> = findings.iter().map(|finding| finding.id).collect();
 
         assert_eq!(
@@ -536,8 +625,27 @@ mod tests {
         )
         .unwrap();
 
-        let findings = analyze_syntax(Path::new("src/main.rs"), &syntax);
+        let findings = analyze_syntax(&package_context(), Path::new("src/main.rs"), &syntax);
 
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn captures_line_and_column_information_for_findings() {
+        let syntax = syn::parse_file(
+            r#"
+            async fn demo() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            "#,
+        )
+        .unwrap();
+
+        let findings = analyze_syntax(&package_context(), Path::new("src/main.rs"), &syntax);
+        let span = findings[0].span.expect("expected source span");
+
+        assert_eq!(span.start_line, 3);
+        assert!(span.start_column > 1);
+        assert_eq!(findings[0].package_name, "fixture-package");
     }
 }

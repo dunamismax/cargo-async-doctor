@@ -1,0 +1,3 @@
+[workspace]
+members = ["default-member", "other-member"]
+default-members = ["default-member"]

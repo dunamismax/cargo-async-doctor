@@ -32,6 +32,20 @@ fn render_human_scan(report: &ScanReport) -> String {
     output.push_str(&format!("schema-version: {}\n", report.schema_version));
     output.push_str(&format!("target: {target}\n"));
     output.push_str(&format!("workspace: {}\n", report.target.workspace));
+
+    if let Some(workspace_root) = &report.target.workspace_root {
+        output.push_str(&format!("workspace-root: {workspace_root}\n"));
+    }
+
+    if report.target.packages.is_empty() {
+        output.push_str("packages: none\n");
+    } else {
+        output.push_str("packages:\n");
+        for package in &report.target.packages {
+            output.push_str(&format!("- {} ({})\n", package.name, package.manifest_path));
+        }
+    }
+
     output.push_str(&format!("warnings: {}\n", report.summary.warnings));
 
     if report.placeholder {
@@ -43,7 +57,13 @@ fn render_human_scan(report: &ScanReport) -> String {
     } else {
         output.push_str("\nDiagnostics:\n");
         for diagnostic in &report.diagnostics {
-            output.push_str(&format!("- [{}] {}\n", diagnostic.id, diagnostic.message));
+            output.push_str(&format!(
+                "- [{}] package={} location={}\n",
+                diagnostic.id,
+                diagnostic.package.name,
+                render_location(&diagnostic.location.file_path, diagnostic.location.line)
+            ));
+            output.push_str(&format!("  message: {}\n", diagnostic.message));
 
             if let Some(help) = &diagnostic.help {
                 output.push_str(&format!("  help: {help}\n"));
@@ -56,6 +76,13 @@ fn render_human_scan(report: &ScanReport) -> String {
     }
 
     output
+}
+
+fn render_location(path: &str, line: Option<usize>) -> String {
+    match line {
+        Some(line) => format!("{path}:{line}"),
+        None => path.to_string(),
+    }
 }
 
 fn render_human_explain(report: &ExplainReport) -> String {
@@ -106,7 +133,10 @@ fn render_human_explain(report: &ExplainReport) -> String {
 #[cfg(test)]
 mod tests {
     use crate::cli::MessageFormat;
-    use crate::diagnostics::{CheckId, ScanReport, ScanSummary, ScanTarget};
+    use crate::diagnostics::{
+        CheckId, Diagnostic, DiagnosticLocation, DiagnosticPackage, ScanPackageTarget, ScanReport,
+        ScanSummary, ScanTarget, Severity,
+    };
     use crate::explain::explain;
 
     use super::{render_explain_report, render_scan_report};
@@ -117,12 +147,34 @@ mod tests {
             target: ScanTarget {
                 workspace: false,
                 manifest_path: Some("fixtures/placeholder/minimal-bin/Cargo.toml".to_string()),
+                workspace_root: Some("fixtures/placeholder/minimal-bin".to_string()),
+                packages: vec![ScanPackageTarget {
+                    name: "fixture-minimal-bin".to_string(),
+                    manifest_path: "fixtures/placeholder/minimal-bin/Cargo.toml".to_string(),
+                }],
             },
             summary: ScanSummary {
-                total: 0,
-                warnings: 0,
+                total: 1,
+                warnings: 1,
             },
-            diagnostics: Vec::new(),
+            diagnostics: vec![Diagnostic {
+                id: CheckId::BlockingSleepInAsync,
+                severity: Severity::Warning,
+                package: DiagnosticPackage {
+                    name: "fixture-minimal-bin".to_string(),
+                    manifest_path: "fixtures/placeholder/minimal-bin/Cargo.toml".to_string(),
+                },
+                location: DiagnosticLocation {
+                    file_path: "src/main.rs".to_string(),
+                    package_path: "src/main.rs".to_string(),
+                    line: Some(2),
+                    column: Some(5),
+                    end_line: Some(2),
+                    end_column: Some(17),
+                },
+                message: "Calls `std::thread::sleep` inside an async context, which blocks the current thread.".to_string(),
+                help: Some("help text".to_string()),
+            }],
             placeholder: true,
             notes: vec!["placeholder report".to_string()],
         }
@@ -134,7 +186,8 @@ mod tests {
 
         assert!(rendered.contains("cargo-async-doctor"));
         assert!(rendered.contains("mode: placeholder scan"));
-        assert!(rendered.contains("No diagnostics emitted."));
+        assert!(rendered.contains("package=fixture-minimal-bin"));
+        assert!(rendered.contains("location=src/main.rs:2"));
         assert!(rendered.contains("note: placeholder report"));
     }
 
@@ -144,7 +197,8 @@ mod tests {
 
         assert!(rendered.contains("\"schema_version\": 1"));
         assert!(rendered.contains("\"placeholder\": true"));
-        assert!(rendered.contains("\"diagnostics\": []"));
+        assert!(rendered.contains("\"package\""));
+        assert!(rendered.contains("\"location\""));
     }
 
     #[test]

@@ -25,10 +25,10 @@ The product bar is not “many warnings.” The product bar is:
 
 ## Current Status
 
-- Current phase: `Phase 4 - Workspace And Path Fidelity`
-- Repository maturity: `Phase 3 explain mode implemented for all shipped checks; workspace fidelity not started`
-- Public promise today: first real async diagnostics with stable IDs, actionable wording, fixture-backed false-positive control, and `explain` mode for every shipped check
-- Public promise after Phase 3: narrow trustworthy checks plus shipped explain mode; broader workspace and path-fidelity work remains separate
+- Current phase: `Phase 5 - Release Hardening`
+- Repository maturity: `Phase 4 workspace/package/path fidelity implemented for shipped checks`
+- Public promise today: first real async diagnostics with stable IDs, actionable wording, fixture-backed false-positive control, explain mode for every shipped check, and workspace-aware package/file/line reporting
+- Public promise after Phase 4: narrow trustworthy checks plus dependable workspace/package/file reporting; broader lint expansion remains separate
 
 ## Operating Rules
 
@@ -222,7 +222,7 @@ Exit criteria:
 
 ### Phase 4 - Workspace And Path Fidelity
 
-Status: `[ ] Not started`
+Status: `[x] Complete`
 
 Goals:
 
@@ -231,12 +231,12 @@ Goals:
 
 Checklist:
 
-- [ ] Add multi-crate workspace fixtures
-- [ ] Resolve package context accurately
-- [ ] Improve file path reporting
-- [ ] Add optional span or line reporting where feasible
-- [ ] Test behavior in root package and workspace member scenarios
-- [ ] Document current parsing/analysis limits
+- [x] Add multi-crate workspace fixtures
+- [x] Resolve package context accurately
+- [x] Improve file path reporting
+- [x] Add optional span or line reporting where feasible
+- [x] Test behavior in root package and workspace member scenarios
+- [x] Document current parsing/analysis limits
 
 Exit criteria:
 
@@ -330,14 +330,18 @@ A task is not done unless:
 - Defined a canonical explain shape with `title`, `summary`, `detects`, `does_not_detect`, `suggested_fixes`, and `references`
 - Added explain coverage for every shipped Phase 2 check plus known/unknown check ID tests
 - Updated the shipped check descriptions to match the actual alias and async-context detection scope
+- Phase 4 completed with Cargo metadata-driven package selection for package manifests, root-package workspaces, and virtual workspace manifests
+- Added multi-crate Phase 4 workspace fixtures covering a root package workspace, workspace-member scans, `--workspace` expansion, and virtual-workspace default-member behavior
+- Added package-aware diagnostics with workspace-relative file paths plus optional line and column reporting sourced from syntax spans
+- Updated human and JSON scan output to surface selected packages, package context, location fields, and current workspace/parsing limits
 
 ## Next Recommended Work
 
-When starting a fresh engineering session, begin with `Phase 4 - Workspace And Path Fidelity`.
+When starting a fresh engineering session, begin with `Phase 5 - Release Hardening`.
 
 Suggested order:
 
-1. add multi-crate workspace fixtures before changing scan behavior
-2. keep package and path fidelity improvements separate from new diagnostic ideas
-3. improve file and optional span reporting without changing the shipped check IDs
-4. defer broader lint-surface expansion until after workspace fidelity is dependable
+1. review warning wording now that package and location context is richer
+2. audit the JSON scan format for naming and long-term stability before calling it release-ready
+3. test the tool against a few real repositories to pressure-check false positives, false negatives, and workspace behavior
+4. document release/versioning process before publishing `0.1.0`
