@@ -20,7 +20,7 @@ Planned focus areas:
 
 ## Status
 
-This repository is in Phase 0. The repo, positioning, and build plan exist; the crate implementation does not yet.
+This repository is in Phase 1: CLI Bootstrap. Phase 0 positioning and planning are complete; the public repo currently contains the docs, scope, and build plan, and implementation has not started yet.
 
 ## Intended UX
 
