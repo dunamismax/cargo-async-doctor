@@ -11,7 +11,7 @@ The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal 
 
 ## Status
 
-Phase 5 release hardening is complete in-repo. The external `0.1.0` publish step is still pending.
+Phase 5 release hardening is complete in-repo, local packaging and publish dry-run verification now pass, and the external `0.1.0` publish step is still pending human approval.
 
 The repository currently provides:
 

@@ -26,7 +26,7 @@ The product bar is not “many warnings.” The product bar is:
 ## Current Status
 
 - Current phase: `Phase 5 - Release Hardening`
-- Repository maturity: `Phase 5 in-repo release hardening complete; external publish still pending`
+- Repository maturity: `Phase 5 in-repo release hardening complete; local packaging and publish dry-run verification passed; external publish still pending`
 - Public promise today: first-release-ready async diagnostics with stable IDs, clearer warning wording, fixture-backed false-positive control, explain mode for every shipped check, workspace-aware package/file/line reporting, and a documented release/versioning process
 - External step still pending: publish `0.1.0` without changing the already-hardened in-repo surface
 
@@ -340,6 +340,7 @@ A task is not done unless:
 - Added `CHANGELOG.md` and updated `README.md` to reflect release-ready-in-repo status with external publish still pending
 - Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, `cargo package --allow-dirty --list`, and read-only scans against several real local repositories to review false positives and false negatives
 - Real-repo validation found two likely true positives in `gitpulse` (`std::fs::create_dir_all` and `std::fs::metadata` inside async functions), no false positives in the checked `tauri::async_runtime::block_on` sync setup path, and one expected false negative in `rust-async-field-guide/examples/blocking-in-async-code` because the current shipped scope does not follow function imports such as `use std::thread::sleep; sleep(...)`
+- Completed a final publish-prep pass: trimmed package contents to exclude repo-only `.github/` and `.gitignore`, confirmed `cargo package --allow-dirty --list` looked sane, and verified a publish dry-run on the prepared tree succeeds without further code or doc fixes
 
 ## Next Recommended Work
 
@@ -348,7 +349,7 @@ When starting a fresh engineering session, finish the external `0.1.0` release s
 Suggested order:
 
 1. review and finalize the `CHANGELOG.md` release entry
-2. run `cargo publish --dry-run`
+2. create the release commit and tag
 3. publish `0.1.0`
 4. cut the matching GitHub release notes
 5. move to `Phase 6 - Post-MVP Expansion` only after the first release is out
