@@ -17,7 +17,7 @@ The goal is not to replace Clippy, rustc diagnostics, or runtime docs. The goal 
 
 ## Status
 
-`cargo-async-doctor` `0.1.1` is the current published release on crates.io. The shipped surface is intentionally narrow, stable, and ready for real use.
+`cargo-async-doctor` `0.1.2` is the current published release on crates.io. The shipped surface is intentionally narrow, stable, and ready for real use.
 
 The repository currently provides:
 
@@ -63,7 +63,7 @@ Current behavior is intentionally narrow:
 - explain mode serves canonical shipped-check content by stable check ID
 - rendering stays separate from both detection and explain-content selection
 
-## Shipped Checks in v0.1.1
+## Shipped Checks in v0.1.2
 
 - `blocking-sleep-in-async`
   Detects direct `std::thread::sleep(...)` calls, plus module aliases imported from `std::thread`, inside `async fn` bodies, async impl methods, nested `async { ... }` blocks, and async closures.
@@ -118,10 +118,10 @@ The detailed release checklist and changelog process live in [`docs/release.md`]
 ## Current Limits
 
 - Detection is still syntax-driven. It does not resolve macros, re-exports, wildcard imports, local `use` statements inside blocks, or function imports such as `use std::thread::sleep; sleep(...)` and `use std::fs::read_to_string; read_to_string(...)`.
-- The shipped checks still match only the narrow documented `0.1.1` patterns; Cargo target and module-tree improvements broaden targeting fidelity, not lint surface area.
+- The shipped checks still match only the narrow documented `0.1.2` patterns; Cargo target and module-tree improvements broaden targeting fidelity, not lint surface area.
 - Sync/async bridge detection still does not follow stored handles or runtimes such as `let handle = Handle::current(); handle.block_on(...)`.
 - Location data is best-effort: line and column fields are present for direct syntax matches, but not for future patterns that may need deeper analysis.
-- Explain mode covers the shipped `0.1.1` checks only; `guard-across-await` remains reserved and intentionally unshipped until the project has stronger type/context handling.
+- Explain mode covers the shipped `0.1.2` checks only; `guard-across-await` remains reserved and intentionally unshipped until the project has stronger type/context handling.
 
 ## Non-Goals
 

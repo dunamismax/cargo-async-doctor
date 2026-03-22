@@ -6,6 +6,8 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-03-22
+
 ### Fixed
 
 - scan package reachability now follows Cargo target roots and reachable module trees, so explicit target paths outside `src/` are included and stray uncompiled Rust files under `src/` stay quiet
