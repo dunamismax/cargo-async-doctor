@@ -262,6 +262,34 @@ fn nested_inline_modules_do_not_inherit_parent_aliases_from_outer_scope() {
 }
 
 #[test]
+fn cfg_disabled_code_and_modules_are_not_scanned() {
+    let report = scan_fixture("phase6/cfg-reachability");
+
+    assert_eq!(report.summary.warnings, 1);
+    assert_eq!(report.diagnostics.len(), 1);
+    assert_eq!(report.diagnostics[0].id, CheckId::BlockingSleepInAsync);
+    assert_eq!(
+        report.diagnostics[0].location.file_path,
+        "src/enabled_module.rs"
+    );
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
+}
+
+#[test]
+fn nested_inline_path_attributes_follow_rustc_resolution() {
+    let report = scan_fixture("phase6/nested-inline-path-attribute");
+
+    assert_eq!(report.summary.warnings, 1);
+    assert_eq!(report.diagnostics.len(), 1);
+    assert_eq!(report.diagnostics[0].id, CheckId::BlockingSleepInAsync);
+    assert_eq!(
+        report.diagnostics[0].location.file_path,
+        "src/outer/child.rs"
+    );
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
+}
+
+#[test]
 fn json_output_for_workspace_fixture_is_structured() {
     let report = scan_fixture_with_workspace("phase4/workspace-root-package", true);
     let rendered = render::render_scan_report(MessageFormat::Json, &report).unwrap();

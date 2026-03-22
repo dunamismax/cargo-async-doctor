@@ -1,14 +1,15 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 use proc_macro2::Span;
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
-    Expr, ExprAsync, ExprCall, ExprClosure, ExprLit, ExprMethodCall, ImplItem, ImplItemFn, Item,
-    ItemFn, ItemMod, Lit, Meta, Path as SynPath, UseTree,
+    Attribute, Expr, ExprAsync, ExprCall, ExprClosure, ExprLit, ExprMethodCall, ImplItem,
+    ImplItemFn, Item, ItemFn, ItemMod, Lit, Meta, Path as SynPath, Token, UseTree,
 };
 
 use crate::diagnostics::CheckId;
@@ -31,6 +32,114 @@ const BLOCKING_STD_FS_FUNCTIONS: &[&str] = &[
     "write",
 ];
 
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub struct ActiveCfg {
+    flags: BTreeSet<String>,
+    key_values: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl ActiveCfg {
+    pub fn from_rustc_cfg(stdout: &str) -> Self {
+        let mut cfg = Self::default();
+
+        for line in stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
+            if let Some((key, value)) = line.split_once('=') {
+                cfg.insert_key_value(key, value.trim_matches('"'));
+            } else {
+                cfg.flags.insert(line.to_string());
+            }
+        }
+
+        cfg
+    }
+
+    pub fn with_features(mut self, features: Vec<String>) -> Self {
+        for feature in features {
+            self.insert_key_value("feature", &feature);
+        }
+        self
+    }
+
+    fn insert_key_value(&mut self, key: &str, value: &str) {
+        self.key_values
+            .entry(key.to_string())
+            .or_default()
+            .insert(value.to_string());
+    }
+
+    fn matches_attrs(&self, attrs: &[Attribute]) -> bool {
+        attrs
+            .iter()
+            .filter(|attribute| attribute.path().is_ident("cfg"))
+            .all(|attribute| self.matches_cfg_attribute(attribute))
+    }
+
+    fn matches_cfg_attribute(&self, attribute: &Attribute) -> bool {
+        let Meta::List(list) = &attribute.meta else {
+            return true;
+        };
+
+        let predicates = match list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+        {
+            Ok(predicates) => predicates,
+            Err(_) => return true,
+        };
+
+        predicates
+            .iter()
+            .all(|predicate| self.matches_cfg_meta(predicate))
+    }
+
+    fn matches_cfg_meta(&self, meta: &Meta) -> bool {
+        match meta {
+            Meta::Path(path) => path
+                .get_ident()
+                .is_some_and(|ident| self.flags.contains(&ident.to_string())),
+            Meta::NameValue(name_value) => {
+                let Some(key) = name_value.path.get_ident() else {
+                    return false;
+                };
+                let Expr::Lit(ExprLit {
+                    lit: Lit::Str(value),
+                    ..
+                }) = &name_value.value
+                else {
+                    return false;
+                };
+
+                self.key_values
+                    .get(&key.to_string())
+                    .is_some_and(|values| values.contains(&value.value()))
+            }
+            Meta::List(list) => {
+                let Some(operator) = list.path.get_ident() else {
+                    return false;
+                };
+                let predicates =
+                    match list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) {
+                        Ok(predicates) => predicates,
+                        Err(_) => return false,
+                    };
+
+                match operator.to_string().as_str() {
+                    "all" => predicates
+                        .iter()
+                        .all(|predicate| self.matches_cfg_meta(predicate)),
+                    "any" => predicates
+                        .iter()
+                        .any(|predicate| self.matches_cfg_meta(predicate)),
+                    "not" => predicates.len() == 1 && !self.matches_cfg_meta(&predicates[0]),
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PackageContext {
     pub name: String,
@@ -38,6 +147,7 @@ pub struct PackageContext {
     pub root_dir: PathBuf,
     pub workspace_root: PathBuf,
     pub target_roots: Vec<PathBuf>,
+    pub active_cfg: ActiveCfg,
 }
 
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
@@ -93,10 +203,14 @@ struct AliasEnv {
 }
 
 impl AliasEnv {
-    fn extend_from_items(&self, items: &[Item]) -> Self {
+    fn extend_from_items(&self, items: &[Item], active_cfg: &ActiveCfg) -> Self {
         let mut env = self.clone();
 
         for item in items {
+            if !item_is_enabled(item, active_cfg) {
+                continue;
+            }
+
             if let Item::Use(item_use) = item {
                 env.record_use_tree(&item_use.tree, &[]);
             }
@@ -167,33 +281,47 @@ struct ModuleContext<'a> {
     package: &'a PackageContext,
     file: PathBuf,
     child_dir: PathBuf,
+    path_attr_base_dir: PathBuf,
 }
 
 impl<'a> ModuleContext<'a> {
     fn crate_root(package: &'a PackageContext, file: &Path) -> Self {
+        let file = normalize_path(file);
+        let path_attr_base_dir = file
+            .parent()
+            .map(normalize_path)
+            .unwrap_or_else(|| package.root_dir.clone());
+
         Self {
             package,
-            file: normalize_path(file),
-            child_dir: file
-                .parent()
-                .map(normalize_path)
-                .unwrap_or_else(|| package.root_dir.clone()),
+            file,
+            child_dir: path_attr_base_dir.clone(),
+            path_attr_base_dir,
         }
     }
 
     fn inline_child(&self, module_name: &str) -> Self {
+        let path_attr_base_dir = normalize_path(&self.child_dir.join(module_name));
+
         Self {
             package: self.package,
             file: self.file.clone(),
-            child_dir: normalize_path(&self.child_dir.join(module_name)),
+            child_dir: path_attr_base_dir.clone(),
+            path_attr_base_dir,
         }
     }
 
     fn external_child(&self, file: PathBuf) -> Self {
+        let path_attr_base_dir = file
+            .parent()
+            .map(normalize_path)
+            .unwrap_or_else(|| self.package.root_dir.clone());
+
         Self {
             package: self.package,
             child_dir: child_module_dir_for_file(&file),
             file,
+            path_attr_base_dir,
         }
     }
 }
@@ -270,6 +398,30 @@ fn analyze_module_file(
     Ok(())
 }
 
+fn item_is_enabled(item: &Item, active_cfg: &ActiveCfg) -> bool {
+    let attrs = match item {
+        Item::Const(item) => &item.attrs,
+        Item::Enum(item) => &item.attrs,
+        Item::ExternCrate(item) => &item.attrs,
+        Item::Fn(item) => &item.attrs,
+        Item::ForeignMod(item) => &item.attrs,
+        Item::Impl(item) => &item.attrs,
+        Item::Macro(item) => &item.attrs,
+        Item::Mod(item) => &item.attrs,
+        Item::Static(item) => &item.attrs,
+        Item::Struct(item) => &item.attrs,
+        Item::Trait(item) => &item.attrs,
+        Item::TraitAlias(item) => &item.attrs,
+        Item::Type(item) => &item.attrs,
+        Item::Union(item) => &item.attrs,
+        Item::Use(item) => &item.attrs,
+        Item::Verbatim(_) => return true,
+        _ => return true,
+    };
+
+    active_cfg.matches_attrs(attrs)
+}
+
 fn analyze_module_items(
     items: &[Item],
     module: &ModuleContext<'_>,
@@ -277,9 +429,13 @@ fn analyze_module_items(
     findings: &mut Vec<Finding>,
     errors: &mut Vec<anyhow::Error>,
 ) {
-    let env = AliasEnv::default().extend_from_items(items);
+    let env = AliasEnv::default().extend_from_items(items, &module.package.active_cfg);
 
     for item in items {
+        if !item_is_enabled(item, &module.package.active_cfg) {
+            continue;
+        }
+
         match item {
             Item::Fn(function) => {
                 analyze_function(function, &env, module, findings, visited_files, errors)
@@ -287,6 +443,10 @@ fn analyze_module_items(
             Item::Impl(item_impl) => {
                 for item in &item_impl.items {
                     if let ImplItem::Fn(function) = item {
+                        if !module.package.active_cfg.matches_attrs(&function.attrs) {
+                            continue;
+                        }
+
                         analyze_impl_function(
                             function,
                             &env,
@@ -313,6 +473,10 @@ fn analyze_nested_module(
     visited_files: &mut BTreeSet<PathBuf>,
     errors: &mut Vec<anyhow::Error>,
 ) {
+    if !module.package.active_cfg.matches_attrs(&item_mod.attrs) {
+        return;
+    }
+
     if let Some((_, items)) = &item_mod.content {
         let child = module.inline_child(&item_mod.ident.to_string());
         analyze_module_items(items, &child, visited_files, findings, errors);
@@ -371,18 +535,7 @@ fn module_path_attribute_candidates(module: &ModuleContext<'_>, path_attr: &Path
         return vec![normalize_path(path_attr)];
     }
 
-    let mut candidates = Vec::new();
-
-    if let Some(file_parent) = module.file.parent() {
-        candidates.push(normalize_path(&file_parent.join(path_attr)));
-    }
-
-    let child_dir_candidate = normalize_path(&module.child_dir.join(path_attr));
-    if !candidates.contains(&child_dir_candidate) {
-        candidates.push(child_dir_candidate);
-    }
-
-    candidates
+    vec![normalize_path(&module.path_attr_base_dir.join(path_attr))]
 }
 
 fn child_module_dir_for_file(file: &Path) -> PathBuf {
@@ -502,6 +655,10 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
     }
 
     fn visit_item_fn(&mut self, node: &ItemFn) {
+        if !self.module.package.active_cfg.matches_attrs(&node.attrs) {
+            return;
+        }
+
         let mut nested = AsyncContextVisitor::new(
             &self.module,
             self.env.clone(),
@@ -514,6 +671,10 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
     }
 
     fn visit_item_mod(&mut self, node: &ItemMod) {
+        if !self.module.package.active_cfg.matches_attrs(&node.attrs) {
+            return;
+        }
+
         analyze_nested_module(
             node,
             &self.module,
@@ -713,7 +874,7 @@ mod tests {
 
     use crate::diagnostics::CheckId;
 
-    use super::PackageContext;
+    use super::{ActiveCfg, PackageContext};
 
     fn package_context() -> PackageContext {
         PackageContext {
@@ -722,6 +883,7 @@ mod tests {
             root_dir: PathBuf::from("."),
             workspace_root: PathBuf::from("."),
             target_roots: vec![PathBuf::from("src/main.rs")],
+            active_cfg: ActiveCfg::default(),
         }
     }
 
@@ -833,6 +995,46 @@ mod tests {
         let findings = analyze_syntax(&package_context(), Path::new("src/main.rs"), &syntax);
 
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn skips_cfg_disabled_functions_modules_and_aliases() {
+        let mut package = package_context();
+        package.active_cfg = ActiveCfg::from_rustc_cfg("unix\n");
+
+        let syntax = syn::parse_file(
+            r#"
+            #[cfg(any())]
+            use std::thread;
+
+            #[cfg(any())]
+            async fn disabled_function() {
+                thread::sleep(std::time::Duration::from_millis(1));
+            }
+
+            #[cfg(any())]
+            mod disabled_module {
+                async fn disabled_nested() {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
+
+            #[cfg(all())]
+            mod enabled_module {
+                use std::thread;
+
+                async fn active_warning() {
+                    thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
+            "#,
+        )
+        .unwrap();
+
+        let findings = analyze_syntax(&package, Path::new("src/main.rs"), &syntax);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, CheckId::BlockingSleepInAsync);
     }
 
     #[test]

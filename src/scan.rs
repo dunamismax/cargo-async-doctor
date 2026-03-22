@@ -5,7 +5,7 @@ use std::process::Command as ProcessCommand;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
-use crate::analysis::{self, Finding, PackageContext};
+use crate::analysis::{self, ActiveCfg, Finding, PackageContext};
 use crate::cli::Cli;
 use crate::diagnostics::{
     CheckId, Diagnostic, DiagnosticLocation, DiagnosticPackage, ScanPackageTarget, ScanReport,
@@ -90,6 +90,7 @@ fn select_packages(manifest_path: &Path, workspace: bool) -> Result<PackageSelec
     let workspace_root = normalize_path(Path::new(&metadata.workspace_root));
     let workspace_root_manifest = workspace_root.join("Cargo.toml");
     let selected_manifest_path = normalize_path(manifest_path);
+    let target_cfg = current_target_cfg()?;
 
     let packages_by_id: BTreeMap<String, MetadataPackage> = metadata
         .packages
@@ -109,9 +110,14 @@ fn select_packages(manifest_path: &Path, workspace: bool) -> Result<PackageSelec
             &packages_by_id,
             &metadata.workspace_members,
             &workspace_root,
+            &target_cfg,
         )?
     } else if let Some(package) = package_for_manifest {
-        vec![package_context_from_metadata(&package, &workspace_root)]
+        vec![package_context_from_metadata(
+            &package,
+            &workspace_root,
+            &target_cfg,
+        )?]
     } else if selected_manifest_path == workspace_root_manifest {
         let default_member_ids = if metadata.workspace_default_members.is_empty() {
             metadata.workspace_members.clone()
@@ -124,7 +130,12 @@ fn select_packages(manifest_path: &Path, workspace: bool) -> Result<PackageSelec
                 .to_string(),
         );
 
-        packages_from_ids(&packages_by_id, &default_member_ids, &workspace_root)?
+        packages_from_ids(
+            &packages_by_id,
+            &default_member_ids,
+            &workspace_root,
+            &target_cfg,
+        )?
     } else {
         bail!(
             "manifest `{}` was not found in Cargo metadata output",
@@ -143,6 +154,7 @@ fn packages_from_ids(
     packages_by_id: &BTreeMap<String, MetadataPackage>,
     package_ids: &[String],
     workspace_root: &Path,
+    target_cfg: &ActiveCfg,
 ) -> Result<Vec<PackageContext>> {
     package_ids
         .iter()
@@ -150,7 +162,7 @@ fn packages_from_ids(
             let package = packages_by_id.get(id).with_context(|| {
                 format!("workspace member `{id}` missing from cargo metadata packages")
             })?;
-            Ok(package_context_from_metadata(package, workspace_root))
+            package_context_from_metadata(package, workspace_root, target_cfg)
         })
         .collect()
 }
@@ -158,7 +170,8 @@ fn packages_from_ids(
 fn package_context_from_metadata(
     package: &MetadataPackage,
     workspace_root: &Path,
-) -> PackageContext {
+    target_cfg: &ActiveCfg,
+) -> Result<PackageContext> {
     let manifest_path = normalize_path(Path::new(&package.manifest_path));
     let root_dir = manifest_path
         .parent()
@@ -179,13 +192,16 @@ fn package_context_from_metadata(
     target_roots.sort();
     target_roots.dedup();
 
-    PackageContext {
+    Ok(PackageContext {
         name: package.name.clone(),
-        manifest_path,
+        manifest_path: manifest_path.clone(),
         root_dir,
         workspace_root: workspace_root.to_path_buf(),
         target_roots,
-    }
+        active_cfg: target_cfg
+            .clone()
+            .with_features(package_default_features(&manifest_path)?),
+    })
 }
 
 fn diagnostic_from_finding(finding: Finding) -> Diagnostic {
@@ -269,6 +285,57 @@ fn normalize_path(path: &Path) -> PathBuf {
     }
 
     normalized
+}
+
+fn current_target_cfg() -> Result<ActiveCfg> {
+    let output = ProcessCommand::new("rustc")
+        .arg("--print")
+        .arg("cfg")
+        .output()
+        .context("failed to invoke `rustc --print cfg`")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        bail!(
+            "`rustc --print cfg` failed: {}",
+            if stderr.is_empty() {
+                "unknown error"
+            } else {
+                &stderr
+            }
+        );
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .context("`rustc --print cfg` returned non-UTF-8 output")?;
+    Ok(ActiveCfg::from_rustc_cfg(&stdout))
+}
+
+fn package_default_features(manifest_path: &Path) -> Result<Vec<String>> {
+    let manifest = std::fs::read_to_string(manifest_path).with_context(|| {
+        format!(
+            "failed to read package manifest `{}` for feature-aware cfg scanning",
+            manifest_path.display()
+        )
+    })?;
+    let manifest: toml::Value = toml::from_str(&manifest).with_context(|| {
+        format!(
+            "failed to parse package manifest `{}` for feature-aware cfg scanning",
+            manifest_path.display()
+        )
+    })?;
+
+    let default_features = manifest
+        .get("features")
+        .and_then(|features| features.get("default"))
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flat_map(|entries| entries.iter())
+        .filter_map(toml::Value::as_str)
+        .map(str::to_string)
+        .collect();
+
+    Ok(default_features)
 }
 
 #[derive(Debug, Deserialize)]

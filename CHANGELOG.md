@@ -6,6 +6,11 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+### Fixed
+
+- scan reachability now respects active `#[cfg(...)]` items and modules, using the current target cfgs plus each package's default features so disabled code stays quiet
+- nested inline `#[path = ...]` modules now resolve the same source file rustc would load, avoiding false negatives when decoy sibling files exist
+
 ## [0.1.2] - 2026-03-22
 
 ### Fixed
