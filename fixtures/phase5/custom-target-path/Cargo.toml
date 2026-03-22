@@ -1,0 +1,8 @@
+[package]
+name = "custom-target-path"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "custom-target-path"
+path = "bin/custom.rs"

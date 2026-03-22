@@ -6,6 +6,11 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+### Fixed
+
+- scan package reachability now follows Cargo target roots and reachable module trees, so explicit target paths outside `src/` are included and stray uncompiled Rust files under `src/` stay quiet
+- nested inline modules no longer inherit parent `use` aliases for `std::thread`, `std::fs`, or Tokio runtime types, which removes false positives from outer-scope alias leakage
+
 ## [0.1.1] - 2026-03-21
 
 ### Docs

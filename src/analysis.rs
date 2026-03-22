@@ -1,14 +1,14 @@
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{
-    Expr, ExprAsync, ExprCall, ExprClosure, ExprMethodCall, File, ImplItem, ImplItemFn, Item,
-    ItemFn, ItemMod, Path as SynPath, UseTree,
+    Expr, ExprAsync, ExprCall, ExprClosure, ExprLit, ExprMethodCall, ImplItem, ImplItemFn, Item,
+    ItemFn, ItemMod, Lit, Meta, Path as SynPath, UseTree,
 };
 
 use crate::diagnostics::CheckId;
@@ -37,9 +37,10 @@ pub struct PackageContext {
     pub manifest_path: PathBuf,
     pub root_dir: PathBuf,
     pub workspace_root: PathBuf,
+    pub target_roots: Vec<PathBuf>,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub struct SourceSpan {
     pub start_line: usize,
     pub start_column: usize,
@@ -161,33 +162,75 @@ impl AliasEnv {
     }
 }
 
-pub fn analyze_package(package: &PackageContext) -> Result<AnalysisResult> {
-    let source_dir = package.root_dir.join("src");
+#[derive(Debug, Clone)]
+struct ModuleContext<'a> {
+    package: &'a PackageContext,
+    file: PathBuf,
+    child_dir: PathBuf,
+}
 
-    if !source_dir.exists() {
+impl<'a> ModuleContext<'a> {
+    fn crate_root(package: &'a PackageContext, file: &Path) -> Self {
+        Self {
+            package,
+            file: normalize_path(file),
+            child_dir: file
+                .parent()
+                .map(normalize_path)
+                .unwrap_or_else(|| package.root_dir.clone()),
+        }
+    }
+
+    fn inline_child(&self, module_name: &str) -> Self {
+        Self {
+            package: self.package,
+            file: self.file.clone(),
+            child_dir: normalize_path(&self.child_dir.join(module_name)),
+        }
+    }
+
+    fn external_child(&self, file: PathBuf) -> Self {
+        Self {
+            package: self.package,
+            child_dir: child_module_dir_for_file(&file),
+            file,
+        }
+    }
+}
+
+pub fn analyze_package(package: &PackageContext) -> Result<AnalysisResult> {
+    if package.target_roots.is_empty() {
         return Ok(AnalysisResult {
             findings: Vec::new(),
             notes: vec![format!(
-                "Package `{}` has no `src/` directory under `{}`.",
-                package.name,
-                package.root_dir.display()
+                "Package `{}` has no Rust crate targets in Cargo metadata.",
+                package.name
             )],
         });
     }
 
     let mut findings = Vec::new();
+    let mut analyzed_roots = BTreeSet::new();
 
-    for file in rust_files_under(&source_dir)? {
-        findings.extend(analyze_file(package, &file)?);
+    for target_root in &package.target_roots {
+        if !analyzed_roots.insert(target_root.clone()) {
+            continue;
+        }
+
+        let mut visited_files = BTreeSet::new();
+        let module = ModuleContext::crate_root(package, target_root);
+        analyze_module_file(&module, &mut visited_files, &mut findings)?;
     }
 
     findings.sort_by(|left, right| {
         left.package_name
             .cmp(&right.package_name)
             .then_with(|| left.file.cmp(&right.file))
+            .then_with(|| left.span.cmp(&right.span))
             .then_with(|| left.id.as_str().cmp(right.id.as_str()))
             .then_with(|| left.matched.cmp(&right.matched))
     });
+    findings.dedup();
 
     Ok(AnalysisResult {
         findings,
@@ -195,67 +238,180 @@ pub fn analyze_package(package: &PackageContext) -> Result<AnalysisResult> {
     })
 }
 
-fn analyze_file(package: &PackageContext, path: &Path) -> Result<Vec<Finding>> {
-    let source = fs::read_to_string(path)
-        .with_context(|| format!("failed to read Rust source file `{}`", path.display()))?;
-    let syntax = syn::parse_file(&source)
-        .with_context(|| format!("failed to parse Rust source file `{}`", path.display()))?;
-    Ok(analyze_syntax(package, path, &syntax))
-}
-
-fn analyze_syntax(package: &PackageContext, path: &Path, syntax: &File) -> Vec<Finding> {
-    let mut findings = Vec::new();
-    analyze_items(
-        &syntax.items,
-        &AliasEnv::default(),
-        package,
-        path,
-        &mut findings,
-    );
-    findings
-}
-
-fn analyze_items(
-    items: &[Item],
-    parent_env: &AliasEnv,
-    package: &PackageContext,
-    file: &Path,
+fn analyze_module_file(
+    module: &ModuleContext<'_>,
+    visited_files: &mut BTreeSet<PathBuf>,
     findings: &mut Vec<Finding>,
+) -> Result<()> {
+    if !visited_files.insert(module.file.clone()) {
+        return Ok(());
+    }
+
+    let source = fs::read_to_string(&module.file).with_context(|| {
+        format!(
+            "failed to read Rust source file `{}`",
+            module.file.display()
+        )
+    })?;
+    let syntax = syn::parse_file(&source).with_context(|| {
+        format!(
+            "failed to parse Rust source file `{}`",
+            module.file.display()
+        )
+    })?;
+
+    let mut errors = Vec::new();
+    analyze_module_items(&syntax.items, module, visited_files, findings, &mut errors);
+
+    if let Some(error) = errors.into_iter().next() {
+        return Err(error);
+    }
+
+    Ok(())
+}
+
+fn analyze_module_items(
+    items: &[Item],
+    module: &ModuleContext<'_>,
+    visited_files: &mut BTreeSet<PathBuf>,
+    findings: &mut Vec<Finding>,
+    errors: &mut Vec<anyhow::Error>,
 ) {
-    let env = parent_env.extend_from_items(items);
+    let env = AliasEnv::default().extend_from_items(items);
 
     for item in items {
         match item {
-            Item::Fn(function) => analyze_function(function, &env, package, file, findings),
+            Item::Fn(function) => {
+                analyze_function(function, &env, module, findings, visited_files, errors)
+            }
             Item::Impl(item_impl) => {
                 for item in &item_impl.items {
                     if let ImplItem::Fn(function) = item {
-                        analyze_impl_function(function, &env, package, file, findings);
+                        analyze_impl_function(
+                            function,
+                            &env,
+                            module,
+                            findings,
+                            visited_files,
+                            errors,
+                        );
                     }
                 }
             }
             Item::Mod(item_mod) => {
-                if let Some((_, items)) = &item_mod.content {
-                    analyze_items(items, &env, package, file, findings);
-                }
+                analyze_nested_module(item_mod, module, findings, visited_files, errors);
             }
             _ => {}
         }
     }
 }
 
+fn analyze_nested_module(
+    item_mod: &ItemMod,
+    module: &ModuleContext<'_>,
+    findings: &mut Vec<Finding>,
+    visited_files: &mut BTreeSet<PathBuf>,
+    errors: &mut Vec<anyhow::Error>,
+) {
+    if let Some((_, items)) = &item_mod.content {
+        let child = module.inline_child(&item_mod.ident.to_string());
+        analyze_module_items(items, &child, visited_files, findings, errors);
+        return;
+    }
+
+    let Some(path) = resolve_external_module(module, item_mod) else {
+        return;
+    };
+
+    let child = module.external_child(path);
+    if let Err(error) = analyze_module_file(&child, visited_files, findings) {
+        errors.push(error);
+    }
+}
+
+fn resolve_external_module(module: &ModuleContext<'_>, item_mod: &ItemMod) -> Option<PathBuf> {
+    let path_attr = module_path_attribute(item_mod).map(PathBuf::from);
+
+    let candidates = if let Some(path_attr) = path_attr {
+        module_path_attribute_candidates(module, &path_attr)
+    } else {
+        let module_name = item_mod.ident.to_string();
+        vec![
+            normalize_path(&module.child_dir.join(format!("{module_name}.rs"))),
+            normalize_path(&module.child_dir.join(&module_name).join("mod.rs")),
+        ]
+    };
+
+    candidates.into_iter().find(|candidate| candidate.exists())
+}
+
+fn module_path_attribute(item_mod: &ItemMod) -> Option<String> {
+    item_mod.attrs.iter().find_map(|attribute| {
+        if !attribute.path().is_ident("path") {
+            return None;
+        }
+
+        let Meta::NameValue(meta) = &attribute.meta else {
+            return None;
+        };
+        let Expr::Lit(ExprLit {
+            lit: Lit::Str(path),
+            ..
+        }) = &meta.value
+        else {
+            return None;
+        };
+
+        Some(path.value())
+    })
+}
+
+fn module_path_attribute_candidates(module: &ModuleContext<'_>, path_attr: &Path) -> Vec<PathBuf> {
+    if path_attr.is_absolute() {
+        return vec![normalize_path(path_attr)];
+    }
+
+    let mut candidates = Vec::new();
+
+    if let Some(file_parent) = module.file.parent() {
+        candidates.push(normalize_path(&file_parent.join(path_attr)));
+    }
+
+    let child_dir_candidate = normalize_path(&module.child_dir.join(path_attr));
+    if !candidates.contains(&child_dir_candidate) {
+        candidates.push(child_dir_candidate);
+    }
+
+    candidates
+}
+
+fn child_module_dir_for_file(file: &Path) -> PathBuf {
+    let file = normalize_path(file);
+    let Some(parent) = file.parent() else {
+        return PathBuf::new();
+    };
+
+    match file.file_stem().and_then(|stem| stem.to_str()) {
+        Some("mod") => parent.to_path_buf(),
+        Some(stem) => parent.join(stem),
+        None => parent.to_path_buf(),
+    }
+}
+
 fn analyze_function(
     function: &ItemFn,
     env: &AliasEnv,
-    package: &PackageContext,
-    file: &Path,
+    module: &ModuleContext<'_>,
     findings: &mut Vec<Finding>,
+    visited_files: &mut BTreeSet<PathBuf>,
+    errors: &mut Vec<anyhow::Error>,
 ) {
     let mut visitor = AsyncContextVisitor::new(
-        package,
-        file,
+        module,
         env.clone(),
         findings,
+        visited_files,
+        errors,
         usize::from(function.sig.asyncness.is_some()),
     );
     visitor.visit_block(&function.block);
@@ -264,67 +420,46 @@ fn analyze_function(
 fn analyze_impl_function(
     function: &ImplItemFn,
     env: &AliasEnv,
-    package: &PackageContext,
-    file: &Path,
+    module: &ModuleContext<'_>,
     findings: &mut Vec<Finding>,
+    visited_files: &mut BTreeSet<PathBuf>,
+    errors: &mut Vec<anyhow::Error>,
 ) {
     let mut visitor = AsyncContextVisitor::new(
-        package,
-        file,
+        module,
         env.clone(),
         findings,
+        visited_files,
+        errors,
         usize::from(function.sig.asyncness.is_some()),
     );
     visitor.visit_block(&function.block);
 }
 
-fn rust_files_under(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    visit_dir(dir, &mut files)?;
-    files.sort();
-    Ok(files)
-}
-
-fn visit_dir(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    let mut entries: Vec<_> = fs::read_dir(dir)
-        .with_context(|| format!("failed to read directory `{}`", dir.display()))?
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .with_context(|| format!("failed to iterate directory `{}`", dir.display()))?;
-    entries.sort_by_key(|entry| entry.path());
-
-    for entry in entries {
-        let path = entry.path();
-        if path.is_dir() {
-            visit_dir(&path, files)?;
-        } else if path.extension().is_some_and(|extension| extension == "rs") {
-            files.push(path);
-        }
-    }
-
-    Ok(())
-}
-
 struct AsyncContextVisitor<'a> {
-    package: &'a PackageContext,
-    file: &'a Path,
+    module: ModuleContext<'a>,
     env: AliasEnv,
     findings: &'a mut Vec<Finding>,
+    visited_files: &'a mut BTreeSet<PathBuf>,
+    errors: &'a mut Vec<anyhow::Error>,
     async_depth: usize,
 }
 
 impl<'a> AsyncContextVisitor<'a> {
     fn new(
-        package: &'a PackageContext,
-        file: &'a Path,
+        module: &ModuleContext<'a>,
         env: AliasEnv,
         findings: &'a mut Vec<Finding>,
+        visited_files: &'a mut BTreeSet<PathBuf>,
+        errors: &'a mut Vec<anyhow::Error>,
         async_depth: usize,
     ) -> Self {
         Self {
-            package,
-            file,
+            module: module.clone(),
             env,
             findings,
+            visited_files,
+            errors,
             async_depth,
         }
     }
@@ -336,11 +471,11 @@ impl<'a> AsyncContextVisitor<'a> {
     fn push_finding(&mut self, id: CheckId, matched: String, span: Option<SourceSpan>) {
         self.findings.push(Finding {
             id,
-            package_name: self.package.name.clone(),
-            package_manifest_path: self.package.manifest_path.clone(),
-            package_root: self.package.root_dir.clone(),
-            workspace_root: self.package.workspace_root.clone(),
-            file: self.file.to_path_buf(),
+            package_name: self.module.package.name.clone(),
+            package_manifest_path: self.module.package.manifest_path.clone(),
+            package_root: self.module.package.root_dir.clone(),
+            workspace_root: self.module.package.workspace_root.clone(),
+            file: self.module.file.clone(),
             matched,
             span,
         });
@@ -356,10 +491,11 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
 
     fn visit_expr_closure(&mut self, node: &ExprClosure) {
         let mut nested = AsyncContextVisitor::new(
-            self.package,
-            self.file,
+            &self.module,
             self.env.clone(),
             self.findings,
+            self.visited_files,
+            self.errors,
             usize::from(node.asyncness.is_some()),
         );
         nested.visit_expr(&node.body);
@@ -367,19 +503,24 @@ impl Visit<'_> for AsyncContextVisitor<'_> {
 
     fn visit_item_fn(&mut self, node: &ItemFn) {
         let mut nested = AsyncContextVisitor::new(
-            self.package,
-            self.file,
+            &self.module,
             self.env.clone(),
             self.findings,
+            self.visited_files,
+            self.errors,
             usize::from(node.sig.asyncness.is_some()),
         );
         nested.visit_block(&node.block);
     }
 
     fn visit_item_mod(&mut self, node: &ItemMod) {
-        if let Some((_, items)) = &node.content {
-            analyze_items(items, &self.env, self.package, self.file, self.findings);
-        }
+        analyze_nested_module(
+            node,
+            &self.module,
+            self.findings,
+            self.visited_files,
+            self.errors,
+        );
     }
 
     fn visit_expr_call(&mut self, node: &ExprCall) {
@@ -548,13 +689,31 @@ fn render_path(path: &SynPath) -> String {
         .join("::")
 }
 
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::RootDir | Component::Prefix(_) | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+
+    normalized
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::diagnostics::CheckId;
 
-    use super::{analyze_syntax, PackageContext};
+    use super::PackageContext;
 
     fn package_context() -> PackageContext {
         PackageContext {
@@ -562,7 +721,30 @@ mod tests {
             manifest_path: PathBuf::from("Cargo.toml"),
             root_dir: PathBuf::from("."),
             workspace_root: PathBuf::from("."),
+            target_roots: vec![PathBuf::from("src/main.rs")],
         }
+    }
+
+    fn analyze_syntax(
+        package: &PackageContext,
+        path: &Path,
+        syntax: &syn::File,
+    ) -> Vec<super::Finding> {
+        let module = super::ModuleContext::crate_root(package, path);
+        let mut findings = Vec::new();
+        let mut visited_files = std::collections::BTreeSet::new();
+        let mut errors = Vec::new();
+
+        super::analyze_module_items(
+            &syntax.items,
+            &module,
+            &mut visited_files,
+            &mut findings,
+            &mut errors,
+        );
+
+        assert!(errors.is_empty(), "unexpected analysis errors: {errors:?}");
+        findings
     }
 
     #[test]
@@ -620,6 +802,29 @@ mod tests {
             async fn async_case() {
                 fs::read_to_string("Cargo.toml");
                 Handle::current().block_on(async {});
+            }
+            "#,
+        )
+        .unwrap();
+
+        let findings = analyze_syntax(&package_context(), Path::new("src/main.rs"), &syntax);
+
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn nested_inline_modules_do_not_inherit_parent_aliases() {
+        let syntax = syn::parse_file(
+            r#"
+            use std::{fs, thread};
+            use tokio::runtime::Handle;
+
+            mod nested {
+                async fn quiet() {
+                    thread::sleep(std::time::Duration::from_millis(1));
+                    fs::read_to_string("Cargo.toml");
+                    Handle::current().block_on(async {});
+                }
             }
             "#,
         )

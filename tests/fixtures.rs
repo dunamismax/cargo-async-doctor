@@ -228,6 +228,40 @@ fn virtual_workspace_manifest_scans_default_members_without_workspace_flag() {
 }
 
 #[test]
+fn stray_rust_files_under_src_are_not_scanned_without_module_reachability() {
+    let report = scan_fixture("phase5/uncompiled-src-file");
+
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(report.summary.warnings, 0);
+    assert_eq!(report.target.packages.len(), 1);
+    assert_eq!(report.target.packages[0].name, "uncompiled-src-file");
+}
+
+#[test]
+fn custom_target_paths_outside_src_are_scanned_via_cargo_metadata() {
+    let report = scan_fixture("phase5/custom-target-path");
+
+    assert_eq!(report.summary.warnings, 1);
+    assert_eq!(report.diagnostics.len(), 1);
+    assert_eq!(report.diagnostics[0].id, CheckId::BlockingSleepInAsync);
+    assert_eq!(report.diagnostics[0].location.file_path, "bin/helper.rs");
+    assert_eq!(report.diagnostics[0].location.line, Some(4));
+}
+
+#[test]
+fn nested_inline_modules_do_not_inherit_parent_aliases_from_outer_scope() {
+    let report = scan_fixture("phase5/nested-inline-module-alias-leakage");
+
+    assert!(report.diagnostics.is_empty());
+    assert_eq!(report.summary.warnings, 0);
+    assert_eq!(report.target.packages.len(), 1);
+    assert_eq!(
+        report.target.packages[0].name,
+        "nested-inline-module-alias-leakage"
+    );
+}
+
+#[test]
 fn json_output_for_workspace_fixture_is_structured() {
     let report = scan_fixture_with_workspace("phase4/workspace-root-package", true);
     let rendered = render::render_scan_report(MessageFormat::Json, &report).unwrap();

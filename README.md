@@ -55,6 +55,7 @@ cargo async-doctor --message-format json explain blocking-sleep-in-async
 Current behavior is intentionally narrow:
 
 - scan mode resolves package selection through `cargo metadata`
+- scan mode follows reachable Rust module trees from each Cargo target root, including explicit target paths outside `src/`, instead of warning on stray uncompiled files
 - package manifests scan that package only unless `--workspace` is set
 - virtual workspace manifests scan default members by default and all workspace members with `--workspace`
 - diagnostics include package context plus workspace-relative file paths when available
@@ -117,7 +118,7 @@ The detailed release checklist and changelog process live in [`docs/release.md`]
 ## Current Limits
 
 - Detection is still syntax-driven. It does not resolve macros, re-exports, wildcard imports, local `use` statements inside blocks, or function imports such as `use std::thread::sleep; sleep(...)` and `use std::fs::read_to_string; read_to_string(...)`.
-- The shipped checks still match only the narrow documented `0.1.1` patterns; the workspace and path improvements broaden targeting fidelity, not lint surface area.
+- The shipped checks still match only the narrow documented `0.1.1` patterns; Cargo target and module-tree improvements broaden targeting fidelity, not lint surface area.
 - Sync/async bridge detection still does not follow stored handles or runtimes such as `let handle = Handle::current(); handle.block_on(...)`.
 - Location data is best-effort: line and column fields are present for direct syntax matches, but not for future patterns that may need deeper analysis.
 - Explain mode covers the shipped `0.1.1` checks only; `guard-across-await` remains reserved and intentionally unshipped until the project has stronger type/context handling.

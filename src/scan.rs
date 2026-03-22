@@ -165,11 +165,26 @@ fn package_context_from_metadata(
         .map(normalize_path)
         .unwrap_or_else(|| workspace_root.to_path_buf());
 
+    let mut target_roots: Vec<PathBuf> = package
+        .targets
+        .iter()
+        .filter(|target| {
+            !target.kind.iter().any(|kind| kind == "custom-build")
+                && Path::new(&target.src_path)
+                    .extension()
+                    .is_some_and(|extension| extension == "rs")
+        })
+        .map(|target| normalize_path(Path::new(&target.src_path)))
+        .collect();
+    target_roots.sort();
+    target_roots.dedup();
+
     PackageContext {
         name: package.name.clone(),
         manifest_path,
         root_dir,
         workspace_root: workspace_root.to_path_buf(),
+        target_roots,
     }
 }
 
@@ -270,6 +285,15 @@ struct MetadataPackage {
     id: String,
     name: String,
     manifest_path: String,
+    #[serde(default)]
+    targets: Vec<MetadataTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MetadataTarget {
+    #[serde(default)]
+    kind: Vec<String>,
+    src_path: String,
 }
 
 fn cargo_metadata(manifest_path: &Path) -> Result<Metadata> {
