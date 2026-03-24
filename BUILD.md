@@ -33,8 +33,8 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ## Repo snapshot
 
-**Published crate:** `0.1.2`
-**Current branch posture:** post-`0.1.2` correctness hardening is already landing in `Unreleased`
+**Published crate:** `0.1.3`
+**Current branch posture:** clean post-`0.1.3` release
 **Active phases:** Phase 5 (release discipline); Phase 3 (correctness hardening) is complete
 
 ### Shipped today
@@ -53,13 +53,6 @@ This repo is not trying to become a general async linter. Trust is the product.
 - Fixture-backed tests, unit tests, structured-output coverage, CI
 - Release checklist and versioning policy in `docs/release.md`
 
-### Landed after `0.1.2` but not yet released
-
-These are already reflected in `CHANGELOG.md` under `Unreleased` and should be treated as real repo state, not shipped crate state:
-
-- scan reachability now respects active `#[cfg(...)]` items and modules using current target cfgs plus each package's default features
-- nested inline `#[path = ...]` module resolution now follows the source file rustc would load instead of a decoy sibling file
-
 ### Not true yet
 
 - no deep semantic resolution for macros, re-exports, wildcard imports, function imports, stored handles, or block-local `use` items
@@ -73,30 +66,7 @@ These are already reflected in `CHANGELOG.md` under `Unreleased` and should be t
 
 ### Next release focus
 
-The next release should still be a **trust-building release**, not a feature-count release.
-
-Primary objective: ship the current correctness hardening cleanly without widening scope carelessly.
-
-### Release gate for the next cut
-
-Before the next version is tagged, this repo should be able to say all of the following with receipts:
-
-- [x] reachable source discovery respects Cargo target roots
-- [x] active `#[cfg(...)]` items and module trees do not create noise from disabled code
-- [x] nested inline `#[path = ...]` modules resolve the file rustc would actually load
-- [x] shipped checks have been spot-checked against a few real async Rust repos after the latest reachability fixes
-- [x] warning wording still matches the real detection limits after the latest hardening work
-- [x] README, BUILD, CHANGELOG, and `docs/release.md` describe the same repo state
-- [x] the existing human/JSON smoke set still passes with no contract surprises
-- [ ] the release decision is explicit: patch release now vs. batch one more correctness pass first
-
-If those boxes cannot be checked honestly, do not cut the release yet.
-
-### What this release is **not** for
-
-- adding a fourth check just to make the project feel bigger
-- quietly broadening semantic claims beyond syntax-driven detection
-- sneaking in JSON shape changes without an explicit schema decision
+The `0.1.3` correctness release has shipped. The next release should focus on either a fourth check (`guard-across-await`) if the false-positive story is defensible, or additional correctness/hardening work that earns further trust.
 
 ---
 
@@ -320,7 +290,7 @@ Active risks:
 
 ### Milestone A — Next patch release is defensible
 
-**Status:** criteria met — ready for release decision
+**Status:** achieved — `0.1.3` released 2026-03-24
 
 Definition:
 - unreleased correctness fixes are verified locally and spot-checked on real repos
@@ -394,7 +364,7 @@ The next meaningful credibility gains come from better targeting, reachability f
 2. ~~run the tool against a few real async Rust repos and note any surprising noise or misses~~ — done: tested mini-redis, hyper, reqwest, axum, sqlx, tokio; zero false positives found
 3. ~~tighten diagnostic wording anywhere the implementation is more heuristic than the prose currently implies~~ — done: all wording audited and confirmed accurate
 4. ~~keep README, BUILD, CHANGELOG, and release docs aligned before deciding to publish~~ — done
-5. decide whether the next cut is a small patch release now or after one more hardening pass — **ready for release decision**
+5. ~~decide whether the next cut is a small patch release now or after one more hardening pass~~ — done: released `0.1.3`
 
 ---
 
@@ -402,6 +372,9 @@ The next meaningful credibility gains come from better targeting, reachability f
 
 ### 2026-03-24
 
+- released `0.1.3` to crates.io: cfg-aware reachability and `#[path = ...]` resolution fixes
+- updated BUILD.md, CHANGELOG.md, and Cargo.toml for the `0.1.3` release
+- Milestone A achieved
 - completed Phase 3 correctness hardening: all open work items verified
 - spot-checked the tool against six real async Rust repos (mini-redis, hyper, reqwest, axum, sqlx, tokio) — zero false positives; all findings were legitimate true positives
 - audited all diagnostic wording and explain content against current detection boundaries — no overstated claims found

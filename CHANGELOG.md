@@ -6,6 +6,8 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-03-24
+
 ### Fixed
 
 - scan reachability now respects active `#[cfg(...)]` items and modules, using the current target cfgs plus each package's default features so disabled code stays quiet
