@@ -2,121 +2,158 @@
 
 ## Purpose
 
-This file is the execution manual for `cargo-async-doctor`.
+This is the live execution manual for `cargo-async-doctor`.
 
-It keeps the repo honest while the tool evolves from its initial release into a mature, stable diagnostic. At any point it should answer:
+Use it to answer, at a glance:
 
 - what the tool actually ships today
-- which public surfaces must stay stable
-- which checks are real versus reserved
-- what the next safe improvement path is
-- what must be proven before stronger claims are made
+- which public contracts must stay stable
+- what the next release is trying to prove
+- which work is still open, and why it matters
+- which expansion ideas are intentionally deferred until trust is earned
 
-This is a living document. When code and docs disagree, fix them together in the same change.
+If code, README, CHANGELOG, and this file disagree, fix them together in the same change.
 
 ---
 
 ## Mission
 
-Build and maintain a small, trustworthy Cargo subcommand for diagnosing common async Rust hazards.
+Build and maintain a small, trustworthy Cargo subcommand for diagnosing async Rust hazards that are easy to write, painful to debug, and often invisible to standard tooling.
 
-The emphasis is on:
+The project wins by being:
 
-- **High-signal checks** --- a few reliable detections beat many noisy ones
-- **Clear explanations** --- every shipped check has actionable explanation content
-- **Stable public surfaces** --- shipped check IDs and JSON output are part of the contract
-- **Conservative scope** --- the tool is intentionally narrow
-- **Low false-positive pressure** --- trust is the product
+- **narrow** enough to stay believable
+- **strict** enough to keep false positives low
+- **clear** enough that each diagnostic points to a practical fix
+- **stable** enough that humans and tooling can rely on it
+
+This repo is not trying to become a general async linter. Trust is the product.
 
 ---
 
-## Repo snapshot
+## Repo reality check
 
-**Current phase: Phase 3 --- correctness hardening / Phase 5 --- maintenance discipline**
-**Published version: `0.1.2`**
+**Published crate:** `0.1.2`
+**Current branch posture:** post-`0.1.2` correctness hardening is already landing in `Unreleased`
+**Active phases:** Phase 3 (correctness hardening) and Phase 5 (release discipline)
 
-What exists today:
+### Shipped today
 
-- Published crate `cargo-async-doctor` `0.1.2` on crates.io
-- Three shipped checks: `blocking-sleep-in-async`, `blocking-std-api-in-async`, `sync-async-bridge-hazard`
+- Crate `cargo-async-doctor` published on crates.io at `0.1.2`
+- Three shipped checks:
+  - `blocking-sleep-in-async`
+  - `blocking-std-api-in-async`
+  - `sync-async-bridge-hazard`
 - Human and JSON scan output
 - Human and JSON `explain` output
 - Stable shipped check IDs
 - Package/workspace selection through `cargo metadata`
-- Package-aware diagnostics with workspace-relative paths where possible
-- Line/column data when a direct syntax span exists
-- Fixture-backed tests, unit tests, structured-output checks, and CI
-- Release notes and versioning policy documented in-repo
+- Package-aware diagnostics with workspace-relative paths where available
+- Best-effort line/column data when a direct syntax span exists
+- Fixture-backed tests, unit tests, structured-output coverage, CI
+- Release checklist and versioning policy in `docs/release.md`
 
-What does **not** exist today:
+### Landed after `0.1.2` but not yet released
 
-- Deep semantic resolution for macros, re-exports, wildcard imports, stored runtime handles, or block-local `use` items
-- The reserved `guard-across-await` check
-- Any promise that every future diagnostic can carry exact line/column information
-- A broad lint surface; this repo is intentionally narrow
+These are already reflected in `CHANGELOG.md` under `Unreleased` and should be treated as real repo state, not shipped crate state:
+
+- scan reachability now respects active `#[cfg(...)]` items and modules using current target cfgs plus each package's default features
+- nested inline `#[path = ...]` module resolution now follows the source file rustc would load instead of a decoy sibling file
+
+### Not true yet
+
+- no deep semantic resolution for macros, re-exports, wildcard imports, function imports, stored handles, or block-local `use` items
+- no shipped `guard-across-await` check
+- no claim that every diagnostic will always carry exact line/column data
+- no broad lint surface beyond the intentionally small shipped check set
 
 ---
 
-## Source-of-truth mapping
+## Current release train
+
+### Next release focus
+
+The next release should still be a **trust-building release**, not a feature-count release.
+
+Primary objective: ship the current correctness hardening cleanly without widening scope carelessly.
+
+### Release gate for the next cut
+
+Before the next version is tagged, this repo should be able to say all of the following with receipts:
+
+- [x] reachable source discovery respects Cargo target roots
+- [x] active `#[cfg(...)]` items and module trees do not create noise from disabled code
+- [x] nested inline `#[path = ...]` modules resolve the file rustc would actually load
+- [ ] shipped checks have been spot-checked against a few real async Rust repos after the latest reachability fixes
+- [ ] warning wording still matches the real detection limits after the latest hardening work
+- [ ] README, BUILD, CHANGELOG, and `docs/release.md` describe the same repo state
+- [ ] the existing human/JSON smoke set still passes with no contract surprises
+- [ ] the release decision is explicit: patch release now vs. batch one more correctness pass first
+
+If those boxes cannot be checked honestly, do not cut the release yet.
+
+### What this release is **not** for
+
+- adding a fourth check just to make the project feel bigger
+- quietly broadening semantic claims beyond syntax-driven detection
+- sneaking in JSON shape changes without an explicit schema decision
+
+---
+
+## Public contracts to protect
+
+These are the surfaces that downstream users will feel immediately if they drift:
+
+1. **Stable shipped check IDs**
+2. **JSON field names and schema discipline**
+3. **Warning wording meaning**
+4. **Explain content matching actual detection behavior**
+5. **Package/workspace targeting correctness**
+
+The code can change aggressively behind those boundaries. The boundaries themselves change slowly and deliberately.
+
+---
+
+## Source-of-truth map
 
 | File | Owns |
 |------|------|
-| `README.md` | Public framing, install, quick start, current limitations |
-| `BUILD.md` | Implementation map, phase tracking, decisions, working rules |
-| `CHANGELOG.md` | User-facing release history |
-| `Cargo.toml` | Published crate metadata, dependency surface |
-| `docs/release.md` | Release checklist and versioning policy |
-| `src/main.rs` | Binary entry point |
-| `src/lib.rs` | Library root |
-| `src/cli.rs` | Clap command definitions |
-| `src/scan.rs` | Cargo metadata package resolution |
-| `src/analysis.rs` | Syn AST visitor and hazard detection |
-| `src/diagnostics.rs` | Diagnostic types and check IDs |
-| `src/explain.rs` | Explain content by check ID |
-| `src/render.rs` | Human and JSON output rendering |
-| `fixtures/` | Positive/negative fixture truth for shipped checks |
-| `tests/` | Fixture-backed integration tests and helpers |
+| `README.md` | public framing, install, quick start, current behavior, limits |
+| `BUILD.md` | execution plan, active phases, decisions, risks, next moves |
+| `CHANGELOG.md` | user-visible change history and `Unreleased` state |
+| `docs/release.md` | release checklist and SemVer / JSON stability policy |
+| `Cargo.toml` | published crate metadata and dependency surface |
+| `src/cli.rs` | CLI surface and command definitions |
+| `src/scan.rs` | package resolution and source discovery |
+| `src/analysis.rs` | AST traversal and hazard detection |
+| `src/diagnostics.rs` | diagnostic structures and stable check IDs |
+| `src/explain.rs` | explain content keyed by check ID |
+| `src/render.rs` | human and JSON presentation |
+| `fixtures/` | positive/negative fixture truth |
+| `tests/` | integration coverage and regression protection |
 
-**Invariant:** If docs, code, and CLI output ever disagree, the next change must reconcile all three.
+**Invariant:** if README says something is shipped, BUILD and the crate behavior must back it up.
 
 ---
 
 ## Working rules
 
-1. **Stable check IDs matter more than check count.** Shipping a new ID is a public commitment. Don't do it casually.
-2. **Explanation quality >= detection quality.** A warning without a good explanation is worse than no warning.
-3. **JSON stability is contractual.** Once a field ships in structured output, breaking it costs real downstream users.
-4. **If a check cannot be made trustworthy, do not ship it.** No "experimental" flags as an excuse for noise.
-5. **Package/workspace targeting is correctness, not convenience.** Bugs here quietly damage confidence even when individual checks work.
-6. **Syntax-driven but honest about it.** The tool says what it can and cannot see. No false claims of semantic analysis.
-7. **Fixture-driven regression protection.** Every shipped check has positive and negative fixture coverage.
-8. **Docs are product surface.** Stale docs are bugs. README/BUILD drift can overstate what the tool actually does.
-9. **Conservative dependency posture.** Every dependency must justify itself. The current set (`syn`, `clap`, `serde`, `serde_json`, `anyhow`, `proc-macro2`, `toml`) is deliberate.
-10. **Release process is part of the product.** For a cargo plugin, packaging discipline is not optional.
-
----
-
-## Tracking conventions
-
-Use this language consistently in docs, commits, and issues:
-
-| Term | Meaning |
-|------|---------|
-| **done** | Implemented and verified |
-| **checked** | Verified by command or test output |
-| **planned** | Intentional, not started |
-| **in-progress** | Actively being worked on |
-| **blocked** | Cannot proceed without a decision or dependency |
-| **risk** | Plausible failure mode that could distort the design |
-| **decision** | A durable call with consequences |
-
-When new work lands, update: repo snapshot, phase dashboard, decisions (if architecture changed), and progress log with date and what was verified.
+1. **Trust beats breadth.** A smaller tool with believable output is better than a larger tool users learn to ignore.
+2. **Stable IDs matter more than fast iteration.** Shipping a new ID is a public commitment.
+3. **Explain quality must match detection quality.** Diagnostics without practical guidance are just noise with extra steps.
+4. **Package/workspace targeting is correctness work.** If the wrong files are scanned, otherwise-good checks become untrustworthy.
+5. **Syntax-driven is fine; pretending otherwise is not.** Be explicit about what the tool cannot see.
+6. **Fixtures are the regression boundary.** Every shipped rule needs positive and negative examples that defend the intended behavior.
+7. **Docs are product surface.** README drift, BUILD drift, and CHANGELOG drift are bugs.
+8. **Release discipline is part of the tool.** For a Cargo plugin, crates.io and docs.rs behavior are part of the user experience.
+9. **Dependencies stay justified.** New crates need a better reason than convenience.
+10. **Expansion is earned.** New checks only ship after the existing surface is boringly reliable.
 
 ---
 
 ## Quality gates
 
-### Minimum local gate (all phases)
+### Minimum local gate
 
 ```bash
 cargo fmt --check
@@ -124,7 +161,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
 
-### Useful command smoke set
+### Useful smoke set
 
 ```bash
 cargo run -- async-doctor --help
@@ -139,221 +176,244 @@ cargo run -- --manifest-path fixtures/phase4/virtual-workspace/Cargo.toml
 cargo package --allow-dirty --list
 ```
 
-For docs-only changes, verify wording consistency and that repo state matches documented commands.
-
-If a gate is temporarily unavailable, document why. Never silently skip.
-
----
-
-## Dependency strategy
-
-### Current dependencies
-
-| Crate | Purpose |
-|-------|---------|
-| `syn` (2.0, full + visit) | Rust source parsing and AST traversal |
-| `proc-macro2` (span-locations) | Source span data for diagnostics |
-| `clap` (4.5, derive) | CLI argument parsing |
-| `serde` + `serde_json` | Structured JSON output |
-| `anyhow` | Error handling |
-| `toml` | Cargo manifest parsing |
-
-### Dependency posture
-
-The current set is deliberate and justified. `syn` is non-negotiable for Rust AST analysis. `clap` earns its weight for a cargo subcommand. `serde`/`serde_json` are required for JSON output stability. Future additions must clear the same bar: what does it replace, what does it cost, is there a simpler alternative?
+For docs-only changes, run the smallest checks that prove the docs still describe the same repo state.
 
 ---
 
 ## Phase dashboard
 
-### Phase 0 --- Repo framing and public-surface definition
-**Status: done**
+### Phase 0 — Repo framing and public-surface definition
+**Status:** done
 
 Goals:
-- [x] Repository structure, README, BUILD, LICENSE
-- [x] Define shipped check surface and stability guarantees
-- [x] Establish quality gates and release process
+- [x] repository structure, README, BUILD, LICENSE
+- [x] define the current public surface and stability language
+- [x] establish quality gates and release-process docs
 
-Exit criteria: Repo structure supports real implementation work. Public docs do not overclaim.
+Exit criteria: the repo can support real implementation and release work without public-surface ambiguity.
 
 ---
 
-### Phase 1 --- First shipped checks and explain flow
-**Status: done**
+### Phase 1 — First shipped checks and explain flow
+**Status:** done
 
 Goals:
-- [x] `blocking-sleep-in-async` detection
-- [x] `blocking-std-api-in-async` detection
-- [x] `sync-async-bridge-hazard` detection
-- [x] Explain flow with canonical content per check ID
-- [x] Human and JSON output rendering
-- [x] Fixture-backed tests for all shipped checks
+- [x] `blocking-sleep-in-async`
+- [x] `blocking-std-api-in-async`
+- [x] `sync-async-bridge-hazard`
+- [x] explain flow keyed by stable check ID
+- [x] human and JSON output
+- [x] fixture-backed coverage for the shipped checks
 
-Exit criteria: Three checks ship with explanation content, human/JSON output, and fixture coverage.
+Exit criteria: the initial tool is useful, explainable, and publishable.
 
 ---
 
-### Phase 2 --- Package/workspace targeting fidelity
-**Status: done**
+### Phase 2 — Package/workspace targeting fidelity
+**Status:** done
 
 Goals:
-- [x] Package selection through `cargo metadata`
-- [x] Workspace-relative paths in diagnostics
-- [x] Virtual workspace support (default members and `--workspace`)
-- [x] Package manifest targeting
+- [x] package selection through `cargo metadata`
+- [x] workspace-relative paths in diagnostics where possible
+- [x] virtual workspace handling for default members and `--workspace`
+- [x] package-manifest targeting
+- [x] reachable module-tree scanning instead of naive file walking
 
-Exit criteria: Package/workspace selection matches `cargo check` behavior. Diagnostics carry correct package context.
+Exit criteria: the scan target set matches Cargo intent closely enough that users can trust what was and was not analyzed.
 
 ---
 
-### Phase 3 --- Correctness hardening and structured output stability
-**Status: in-progress**
+### Phase 3 — Correctness hardening inside the shipped surface
+**Status:** in-progress
 
-Goals:
-- [ ] Package/workspace targeting correctness edge cases
-- [ ] Nested module and `#[cfg(...)]` reachability fidelity
-- [ ] Warning wording precision
-- [ ] JSON stability discipline
-- [ ] Explain coverage staying aligned with shipped behavior
+This is the current engineering center of gravity. The right move is to make the existing checks harder to fool before inventing new ones.
 
-Exit criteria: Current shipped surface is tightened without widening recklessly. JSON output is stable enough for downstream tooling.
+Completed or landed work:
+- [x] target-root reachability avoids scanning stray uncompiled files
+- [x] nested inline modules no longer leak outer alias assumptions
+- [x] active `#[cfg(...)]` reachability keeps disabled code quiet
+- [x] nested inline `#[path = ...]` modules resolve like rustc instead of matching the wrong sibling file
 
-Risks:
-- **risk:** adding checks to meet a count target damages trust faster than it increases usefulness
-- **risk:** JSON drift without explicit schema discipline is expensive for downstream users
+Still-open work:
+- [ ] run the latest scan behavior against several real async Rust repos and record whether the warnings still feel high-signal
+- [ ] audit the wording for each shipped diagnostic against the current detection boundaries and fix anything that now overstates certainty
+- [ ] review remaining reachability corner cases around unusual target layouts and module trees found during real-repo testing
+- [ ] confirm the current JSON output still expresses enough context for downstream tooling without adding unstable detail too early
+- [ ] keep `explain` content aligned with any wording or scope refinements from the hardening work
 
----
+Exit criteria:
+- shipped checks behave more predictably on real repositories
+- warning wording matches what the syntax-driven engine can actually prove
+- JSON output remains stable while the detection logic gets sharper
 
-### Phase 4 --- Future check expansion with strict false-positive control
-**Status: not started**
-
-Goals:
-- [ ] Evaluate `guard-across-await` shippability
-- [ ] Determine deeper name resolution investment vs. tool size
-- [ ] Decide runtime-agnostic vs. Tokio-shaped check scope
-
-Exit criteria: Any new check has a false-positive story strong enough to defend before merging.
-
-Risks:
-- **risk:** adding weak checks damages the trust that makes this tool useful
-- **risk:** scope creep toward a general async linter
+Active risks:
+- **risk:** correctness work that is not tested on real repos can still feel good locally and be noisy in practice
+- **risk:** wording drift can make a syntactic heuristic sound stronger than it really is
+- **risk:** silent JSON drift would punish integrators for internal refactors
 
 ---
 
-### Phase 5 --- Release polish and long-term maintenance discipline
-**Status: in-progress**
+### Phase 4 — Check expansion with a strict false-positive bar
+**Status:** planned
+
+This phase starts only after Phase 3 has earned it.
 
 Goals:
-- [ ] Changelog stays current as fixes land
-- [ ] Release process stays explicit and documented
-- [ ] Packaging/docs.rs/crates.io sanity stays cheap to verify
-- [ ] Docs stay aligned with the real shipped surface
+- [ ] write down the exact success/failure story for `guard-across-await` before any implementation push
+- [ ] decide whether deeper name resolution would improve signal enough to justify the complexity cost
+- [ ] choose the check-shaping policy for future rules: Tokio-specific when necessary vs. runtime-agnostic when credible
+- [ ] require a fixture story and explanation story before any new check is considered shippable
 
-Exit criteria: The repo is easy to defend as a small, stable, published tool.
+Exit criteria: any new check can be defended on trust grounds before it is defended on ambition grounds.
 
-Risks:
-- **risk:** README/BUILD drift can overstate what the tool actually does
-- **risk:** package selection correctness bugs can quietly damage confidence
+Active risks:
+- **risk:** pressure to grow the check list can damage the thing users actually value: believable output
+- **risk:** deeper resolution logic may cost more complexity than this intentionally small tool should carry
+- **risk:** expansion can blur the repo's identity if the scope stops being obviously narrow
+
+---
+
+### Phase 5 — Release polish and long-term maintenance discipline
+**Status:** in-progress
+
+Goals:
+- [ ] keep `CHANGELOG.md` current as fixes land instead of reconstructing history later
+- [ ] keep README/BUILD/release docs synchronized before each release, not after
+- [ ] make patch-release readiness cheap to verify with the existing gate + smoke set
+- [ ] keep crates.io/docs.rs/package sanity part of normal release review
+- [ ] preserve the narrow-tool positioning as the repo grows so the docs never imply a general lint suite
+
+Exit criteria: releasing a small correctness update feels routine instead of ceremonial, and the docs still tell the truth.
+
+Active risks:
+- **risk:** docs can freeze around the last release while `Unreleased` keeps moving
+- **risk:** public-facing phrasing can slowly overstate maturity if maintenance discipline gets sloppy
+
+---
+
+## Milestones worth aiming at
+
+### Milestone A — Next patch release is defensible
+
+Definition:
+- unreleased correctness fixes are verified locally and spot-checked on real repos
+- docs and changelog agree on what changed
+- release notes can explain the value in one short paragraph
+
+### Milestone B — Shipped checks feel boringly reliable
+
+Definition:
+- obvious async hazards in the current scope are caught consistently
+- false positives are rare enough that users do not learn to tune the tool out
+- wording is precise enough that a warning reads like a diagnosis, not a guess
+
+### Milestone C — Expansion decision made on evidence, not itchiness
+
+Definition:
+- the repo has enough confidence in the current surface to justify either a fourth check or a conscious decision to stay narrow longer
+- `guard-across-await` is either scoped rigorously or explicitly deferred again
+
+---
+
+## Dependency posture
+
+### Current dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `syn` (2.0, `full` + `visit`) | Rust parsing and AST traversal |
+| `proc-macro2` (`span-locations`) | best-effort source span data |
+| `clap` (4.5, `derive`) | CLI argument parsing |
+| `serde` + `serde_json` | structured output |
+| `anyhow` | error handling |
+| `toml` | Cargo manifest parsing |
+
+### Rule
+
+The current dependency set is deliberate. Additions must answer three questions clearly:
+
+1. what concrete limitation does this remove?
+2. why is the complexity worth it for this small tool?
+3. what contract or maintenance burden does it create?
 
 ---
 
 ## Decisions
 
-### decision-0001: Syntax-driven analysis over semantic resolution
+### decision-0001 — Syntax-driven analysis over semantic resolution
 **Phase:** 1
 
-The tool uses `syn` for AST-level detection rather than attempting full name resolution. This means it catches direct calls and simple aliases but misses re-exports, macros, and stored handles. The tradeoff is deliberate: trustworthy results on the common case beat ambitious results with high false-positive rates.
+The tool uses `syn`-level analysis instead of full compiler-style name resolution. That keeps implementation size and false-positive pressure under control, at the cost of missing re-exports, macros, stored handles, wildcard imports, and other deeper cases.
 
-### decision-0002: Stable check IDs as public contract
+### decision-0002 — Stable shipped check IDs are a public contract
 **Phase:** 1
 
-Shipped check IDs (`blocking-sleep-in-async`, etc.) are part of the public surface. Renaming or removing them is a breaking change. New IDs require the same commitment.
+Renaming or removing a shipped check ID is a breaking change. New IDs must be treated like API surface.
 
-### decision-0003: `guard-across-await` stays reserved
-**Phase:** 1 (revisited Phase 4)
+### decision-0003 — `guard-across-await` remains reserved
+**Phase:** 1, revisited in Phase 4
 
-The check is reserved but not shipped. It stays that way until the repo can defend it with acceptable noise levels.
+The idea is valuable, but it does not ship until the repo can defend the false-positive story and explainability story.
 
-### decision-0004: Separate rendering from detection
+### decision-0004 — Rendering stays separate from detection
 **Phase:** 1
 
-Detection produces diagnostics. Rendering formats them. This separation keeps JSON stability independent of detection improvements and makes human output a presentation concern, not a logic concern.
+Detection produces diagnostics; rendering formats them. This keeps presentation changes from bleeding into analysis logic and helps preserve JSON contract stability.
 
-### decision-0005: Release/process docs are product
+### decision-0005 — Release/process docs are part of the product
 **Phase:** 2
 
-For a cargo plugin, release discipline is not optional extra prose. `docs/release.md` and `CHANGELOG.md` are part of the tool's product surface.
+For a published Cargo plugin, crates.io metadata, docs.rs rendering, changelog clarity, and release repeatability are part of what users consume.
 
----
+### decision-0006 — Grow by hardening first, not by collecting checks
+**Phase:** 3
 
-## Risks
-
-### Active risks
-
-- **risk:** adding checks to meet a count target damages trust faster than it increases usefulness
-- **risk:** public JSON drift without explicit schema discipline would be expensive for downstream users
-- **risk:** README/BUILD drift can overstate what the tool actually does
-- **risk:** package selection correctness bugs can quietly damage confidence even when individual checks are fine
-- **risk:** deeper name resolution investment may not be worth the complexity for an intentionally small tool
-
-### Mitigated risks
-
-- **risk (mitigated):** overclaiming in docs --- README and BUILD explicitly state current limits
-- **risk (mitigated):** unstable check IDs --- stable ID contract established from Phase 1
+The next meaningful credibility gains come from better targeting, reachability fidelity, wording precision, and real-repo validation. New checks can wait.
 
 ---
 
 ## Open questions
 
-| Question | Phase | Impact |
-|----------|-------|--------|
-| Should `guard-across-await` ever ship? | 4 | Check surface expansion |
-| How much deeper name resolution is worth adding? | 4 | Tool complexity vs. intentional narrowness |
-| Should future checks be Tokio-shaped only or runtime-agnostic? | 4 | Scope definition |
-| How to handle macros that generate async code? | 4 | Detection fidelity |
+| Question | Why it matters |
+|----------|----------------|
+| Should the next release be cut as soon as the current hardening work is verified, or should it batch one more correctness pass? | determines patch cadence and release scope |
+| How many real-repo spot checks are enough before calling the latest reachability fixes ready? | prevents local-only confidence |
+| Is `guard-across-await` actually shippable without semantic overreach? | decides whether Phase 4 is real or still aspirational |
+| How much deeper name resolution is worth paying for in an intentionally narrow tool? | determines long-term complexity ceiling |
+| Should future check growth stay Tokio-shaped when needed or push harder for runtime-agnostic wording and detection? | sets scope expectations for users |
 
 ---
 
 ## Immediate next moves
 
-- Keep README, BUILD, and release docs aligned with `0.1.2` behavior
-- Continue correctness hardening inside the current shipped check set
-- Only add new checks when the semantics and false-positive story are strong enough to defend
-- Keep `CHANGELOG.md` current as fixes land
+1. verify the current unreleased correctness fixes with the existing smoke set
+2. run the tool against a few real async Rust repos and note any surprising noise or misses
+3. tighten diagnostic wording anywhere the implementation is more heuristic than the prose currently implies
+4. keep README, BUILD, CHANGELOG, and release docs aligned before deciding to publish
+5. decide whether the next cut is a small patch release now or after one more hardening pass
 
 ---
 
 ## Progress log
 
-### 2026-03-22
+### 2026-03-24
 
-- Revised README and BUILD to match cross-repo documentation standards
-- Kept all existing content, restructured for consistency
-
-### 2026-03-22
-
-- Restored `README.md` as a real repo overview after the docs-tightening regression
-- Reintroduced `BUILD.md` as the operational handoff / status document
-- Kept the current published `0.1.2` surface and release docs as the source of truth
+- rewrote `BUILD.md` as a live execution manual instead of a mostly static status handoff
+- tied active planning to the real post-`0.1.2` `Unreleased` work already captured in `CHANGELOG.md`
+- made the next release gate explicit so the repo has meaningful unchecked work instead of vague future intent
 
 ### 2026-03-22
 
-- `0.1.2` released with package-target reachability and nested inline-module fixes
+- revised README and BUILD for structural consistency across the portfolio
+- restored `README.md` as a real repo overview after the earlier docs-tightening regression
+- reintroduced `BUILD.md` as the operational status document
+- released `0.1.2` with package-target reachability and nested inline-module fixes
 
 ### 2026-03-21
 
-- `0.1.1` released
-- Initial public release sequence and release-process docs established
+- released `0.1.1`
+- established the initial public release sequence and release-process docs
 
 ---
 
-## Decision log
-
-- Stable check IDs matter more than shipping more checks quickly
-- Syntax-driven but trustworthy beats ambitious but noisy
-- `guard-across-await` stays reserved until the repo can defend it
-- Release/process docs are part of the product for a cargo plugin, not optional extra prose
-
----
-
-*Update this log only with things that actually happened.*
+*Only log things that actually happened. Aspirations belong in phases, milestones, and next moves — not in the history.*
