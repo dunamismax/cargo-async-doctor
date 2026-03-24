@@ -31,7 +31,7 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ---
 
-## Repo reality check
+## Repo snapshot
 
 **Published crate:** `0.1.2`
 **Current branch posture:** post-`0.1.2` correctness hardening is already landing in `Unreleased`
@@ -114,7 +114,7 @@ The code can change aggressively behind those boundaries. The boundaries themsel
 
 ---
 
-## Source-of-truth map
+## Source-of-truth mapping
 
 | File | Owns |
 |------|------|
@@ -177,6 +177,29 @@ cargo package --allow-dirty --list
 ```
 
 For docs-only changes, run the smallest checks that prove the docs still describe the same repo state.
+
+---
+
+## Dependency strategy
+
+### Current dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `syn` (2.0, `full` + `visit`) | Rust parsing and AST traversal |
+| `proc-macro2` (`span-locations`) | best-effort source span data |
+| `clap` (4.5, `derive`) | CLI argument parsing |
+| `serde` + `serde_json` | structured output |
+| `anyhow` | error handling |
+| `toml` | Cargo manifest parsing |
+
+### Rule
+
+The current dependency set is deliberate. Additions must answer three questions clearly:
+
+1. what concrete limitation does this remove?
+2. why is the complexity worth it for this small tool?
+3. what contract or maintenance burden does it create?
 
 ---
 
@@ -291,7 +314,7 @@ Active risks:
 
 ---
 
-## Milestones worth aiming at
+## Milestone map
 
 ### Milestone A — Next patch release is defensible
 
@@ -312,29 +335,6 @@ Definition:
 Definition:
 - the repo has enough confidence in the current surface to justify either a fourth check or a conscious decision to stay narrow longer
 - `guard-across-await` is either scoped rigorously or explicitly deferred again
-
----
-
-## Dependency posture
-
-### Current dependencies
-
-| Crate | Purpose |
-|-------|---------|
-| `syn` (2.0, `full` + `visit`) | Rust parsing and AST traversal |
-| `proc-macro2` (`span-locations`) | best-effort source span data |
-| `clap` (4.5, `derive`) | CLI argument parsing |
-| `serde` + `serde_json` | structured output |
-| `anyhow` | error handling |
-| `toml` | Cargo manifest parsing |
-
-### Rule
-
-The current dependency set is deliberate. Additions must answer three questions clearly:
-
-1. what concrete limitation does this remove?
-2. why is the complexity worth it for this small tool?
-3. what contract or maintenance burden does it create?
 
 ---
 
