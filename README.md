@@ -1,5 +1,7 @@
 # cargo-async-doctor
 
+[![CI](https://github.com/dunamismax/cargo-async-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/dunamismax/cargo-async-doctor/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/cargo-async-doctor.svg)](https://crates.io/crates/cargo-async-doctor) [![docs.rs](https://docs.rs/cargo-async-doctor/badge.svg)](https://docs.rs/cargo-async-doctor) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Spot common async Rust hazards. Get the fix.**
 
 `cargo-async-doctor` is a Cargo subcommand that detects high-signal async mistakes in Rust code, explains why they matter, and points to a practical fix. It is intentionally narrow: a small set of trustworthy checks, not a replacement for rustc, Clippy, or runtime documentation.
