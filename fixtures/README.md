@@ -1,6 +1,10 @@
 # Fixtures
 
-This directory holds small Cargo projects used by `cargo-async-doctor` tests.
+**Small Cargo projects used to keep `cargo-async-doctor` checks honest.**
+
+This directory holds focused fixture projects that exercise shipped diagnostics, workspace-selection behavior, reachability rules, and false-positive control.
+
+## Phase Coverage
 
 Phase 2 ships focused fixtures for the first trustworthy checks:
 
@@ -25,4 +29,8 @@ Phase 6 adds cfg-aware reachability and nested `#[path = ...]` regressions:
 - `phase6/cfg-reachability` mixes cfg-disabled functions and modules with one cfg-enabled module behind a default feature. It proves scans skip inactive code while still following the active reachability set.
 - `phase6/nested-inline-path-attribute` keeps both a decoy `src/child.rs` and the real `src/outer/child.rs`. It proves nested inline `#[path = ...]` resolution follows the same file rustc would load.
 
-Keep fixtures small, explicit, and check-specific. Add positive and negative cases together so false-positive control evolves with each shipped diagnostic.
+## Fixture Rules
+
+- keep fixtures small, explicit, and check-specific
+- add positive and negative cases together so false-positive control evolves with each shipped diagnostic
+- prefer the smallest project shape that proves the rule under test

@@ -4,7 +4,7 @@
 
 `cargo-async-doctor` is a Cargo subcommand that detects high-signal async mistakes in Rust code, explains why they matter, and points to a practical fix. It is intentionally narrow: a small set of trustworthy checks, not a replacement for rustc, Clippy, or runtime documentation.
 
-> **Published crate: `0.1.2`** --- Three shipped checks, human and JSON output, package/workspace targeting, fixture-backed tests, CI. See [CHANGELOG.md](CHANGELOG.md) for release history.
+> **Status:** Published crate `0.1.2`. Three shipped checks, human and JSON output, package/workspace targeting, fixture-backed tests, and CI are in place. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Why cargo-async-doctor?
 
@@ -78,7 +78,7 @@ Detects `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` sty
 - **Explain** --- serves canonical explanation content by stable check ID
 - **Render** --- formats diagnostics as human-readable text or structured JSON, separate from detection logic
 
-## Current behavior
+## What Ships Today
 
 - Scan mode resolves package selection through `cargo metadata`
 - Package manifests scan that package unless `--workspace` is set
@@ -96,7 +96,7 @@ Detects `Handle::current().block_on(...)` and `Runtime::new().block_on(...)` sty
 - Location data is best-effort, tied to direct syntax matches
 - Explain mode covers shipped checks only
 
-## Local verification
+## Development And Verification
 
 From the repository root:
 
@@ -121,7 +121,7 @@ cargo run -- --manifest-path fixtures/phase4/virtual-workspace/Cargo.toml
 cargo package --allow-dirty --list
 ```
 
-## Repository layout
+## Repository Layout
 
 ```text
 .
