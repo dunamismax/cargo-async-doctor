@@ -39,7 +39,7 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ### Shipped today
 
-- Crate `cargo-async-doctor` published on crates.io at `0.1.2`
+- Crate `cargo-async-doctor` published on crates.io at `0.1.3`
 - Three shipped checks:
   - `blocking-sleep-in-async`
   - `blocking-std-api-in-async`
