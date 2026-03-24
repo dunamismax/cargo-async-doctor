@@ -161,7 +161,7 @@ cargo package --allow-dirty --list
 | 0 | Repo framing and public-surface definition | **Done** |
 | 1 | First shipped checks and explain flow | **Done** |
 | 2 | Package/workspace targeting fidelity | **Done** |
-| 3 | Correctness hardening and structured output stability | **In progress** |
+| 3 | Correctness hardening and structured output stability | **Done** |
 | 4 | Future check expansion with strict false-positive control | Not started |
 | 5 | Release polish and long-term maintenance discipline | **In progress** |
 
