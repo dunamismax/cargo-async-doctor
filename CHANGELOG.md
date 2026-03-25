@@ -6,6 +6,13 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-25
+
+### Changed
+
+- Promoted to v1.0.0 production release
+- Updated status and documentation to reflect stable release
+
 ## [0.1.3] - 2026-03-24
 
 ### Fixed

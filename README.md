@@ -6,7 +6,7 @@
 
 `cargo-async-doctor` is a Cargo subcommand that detects high-signal async mistakes in Rust code, explains why they matter, and points to a practical fix. It is intentionally narrow: a small set of trustworthy checks, not a replacement for rustc, Clippy, or runtime documentation.
 
-> **Status:** Published crate `0.1.3`. Three shipped checks, human and JSON output, package/workspace targeting, cfg-aware reachability, fixture-backed tests, and CI are in place. See [CHANGELOG.md](CHANGELOG.md) for release history.
+> **Status:** v1.0.0 production release. Three shipped checks, human and JSON output, package/workspace targeting, cfg-aware reachability, fixture-backed tests, and CI are in place. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Why cargo-async-doctor?
 
@@ -127,7 +127,7 @@ cargo package --allow-dirty --list
 
 ```text
 .
-├── BUILD.md              # execution manual — status, decisions, progress
+├── BUILD.md              # execution manual -- status, decisions, progress
 ├── README.md             # public-facing project description
 ├── CHANGELOG.md          # user-facing release history
 ├── LICENSE               # MIT
