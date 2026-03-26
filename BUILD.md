@@ -33,13 +33,13 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ## Repo snapshot
 
-**Published crate:** `0.1.3`
-**Current branch posture:** clean post-`0.1.3` release
+**Published crate:** `1.0.0`
+**Current branch posture:** clean post-`1.0.0` release
 **Active phases:** Phase 5 (release discipline); Phase 3 (correctness hardening) is complete
 
 ### Shipped today
 
-- Crate `cargo-async-doctor` published on crates.io at `0.1.3`
+- Crate `cargo-async-doctor` published on crates.io at `1.0.0`
 - Three shipped checks:
   - `blocking-sleep-in-async`
   - `blocking-std-api-in-async`
@@ -66,7 +66,7 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ### Next release focus
 
-The `0.1.3` correctness release has shipped. The next release should focus on either a fourth check (`guard-across-await`) if the false-positive story is defensible, or additional correctness/hardening work that earns further trust.
+v1.0.0 is released. The next release should focus on either a fourth check (`guard-across-await`) if the false-positive story is defensible, or additional correctness/hardening work that earns further trust.
 
 ---
 
@@ -175,7 +175,7 @@ The current dependency set is deliberate. Additions must answer three questions 
 
 ## Phase dashboard
 
-### Phase 0 — Repo framing and public-surface definition
+### Phase 0 -- Repo framing and public-surface definition
 **Status:** done
 
 Goals:
@@ -187,7 +187,7 @@ Exit criteria: the repo can support real implementation and release work without
 
 ---
 
-### Phase 1 — First shipped checks and explain flow
+### Phase 1 -- First shipped checks and explain flow
 **Status:** done
 
 Goals:
@@ -202,7 +202,7 @@ Exit criteria: the initial tool is useful, explainable, and publishable.
 
 ---
 
-### Phase 2 — Package/workspace targeting fidelity
+### Phase 2 -- Package/workspace targeting fidelity
 **Status:** done
 
 Goals:
@@ -216,7 +216,7 @@ Exit criteria: the scan target set matches Cargo intent closely enough that user
 
 ---
 
-### Phase 3 — Correctness hardening inside the shipped surface
+### Phase 3 -- Correctness hardening inside the shipped surface
 **Status:** done
 
 This is the current engineering center of gravity. The right move is to make the existing checks harder to fool before inventing new ones.
@@ -242,13 +242,13 @@ Exit criteria:
 All exit criteria verified. Phase 3 is complete.
 
 Active risks:
-- ~~**risk:** correctness work that is not tested on real repos can still feel good locally and be noisy in practice~~ — mitigated: spot-checked against mini-redis, hyper, reqwest, axum, sqlx, and tokio; all findings were legitimate true positives
-- ~~**risk:** wording drift can make a syntactic heuristic sound stronger than it really is~~ — mitigated: all diagnostic and explain wording audited and confirmed accurate
-- ~~**risk:** silent JSON drift would punish integrators for internal refactors~~ — mitigated: JSON output verified stable against schema_version 1 contract
+- ~~**risk:** correctness work that is not tested on real repos can still feel good locally and be noisy in practice~~ -- mitigated: spot-checked against mini-redis, hyper, reqwest, axum, sqlx, and tokio; all findings were legitimate true positives
+- ~~**risk:** wording drift can make a syntactic heuristic sound stronger than it really is~~ -- mitigated: all diagnostic and explain wording audited and confirmed accurate
+- ~~**risk:** silent JSON drift would punish integrators for internal refactors~~ -- mitigated: JSON output verified stable against schema_version 1 contract
 
 ---
 
-### Phase 4 — Check expansion with a strict false-positive bar
+### Phase 4 -- Check expansion with a strict false-positive bar
 **Status:** planned
 
 This phase starts only after Phase 3 has earned it.
@@ -268,7 +268,7 @@ Active risks:
 
 ---
 
-### Phase 5 — Release polish and long-term maintenance discipline
+### Phase 5 -- Release polish and long-term maintenance discipline
 **Status:** in-progress
 
 Goals:
@@ -288,23 +288,23 @@ Active risks:
 
 ## Milestone map
 
-### Milestone A — Next patch release is defensible
+### Milestone A -- Next patch release is defensible
 
-**Status:** achieved — `0.1.3` released 2026-03-24
+**Status:** achieved -- `1.0.0` released 2026-03-25
 
 Definition:
 - unreleased correctness fixes are verified locally and spot-checked on real repos
 - docs and changelog agree on what changed
 - release notes can explain the value in one short paragraph
 
-### Milestone B — Shipped checks feel boringly reliable
+### Milestone B -- Shipped checks feel boringly reliable
 
 Definition:
 - obvious async hazards in the current scope are caught consistently
 - false positives are rare enough that users do not learn to tune the tool out
 - wording is precise enough that a warning reads like a diagnosis, not a guess
 
-### Milestone C — Expansion decision made on evidence, not itchiness
+### Milestone C -- Expansion decision made on evidence, not itchiness
 
 Definition:
 - the repo has enough confidence in the current surface to justify either a fourth check or a conscious decision to stay narrow longer
@@ -314,32 +314,32 @@ Definition:
 
 ## Decisions
 
-### decision-0001 — Syntax-driven analysis over semantic resolution
+### decision-0001 -- Syntax-driven analysis over semantic resolution
 **Phase:** 1
 
 The tool uses `syn`-level analysis instead of full compiler-style name resolution. That keeps implementation size and false-positive pressure under control, at the cost of missing re-exports, macros, stored handles, wildcard imports, and other deeper cases.
 
-### decision-0002 — Stable shipped check IDs are a public contract
+### decision-0002 -- Stable shipped check IDs are a public contract
 **Phase:** 1
 
 Renaming or removing a shipped check ID is a breaking change. New IDs must be treated like API surface.
 
-### decision-0003 — `guard-across-await` remains reserved
+### decision-0003 -- `guard-across-await` remains reserved
 **Phase:** 1, revisited in Phase 4
 
 The idea is valuable, but it does not ship until the repo can defend the false-positive story and explainability story.
 
-### decision-0004 — Rendering stays separate from detection
+### decision-0004 -- Rendering stays separate from detection
 **Phase:** 1
 
 Detection produces diagnostics; rendering formats them. This keeps presentation changes from bleeding into analysis logic and helps preserve JSON contract stability.
 
-### decision-0005 — Release/process docs are part of the product
+### decision-0005 -- Release/process docs are part of the product
 **Phase:** 2
 
 For a published Cargo plugin, crates.io metadata, docs.rs rendering, changelog clarity, and release repeatability are part of what users consume.
 
-### decision-0006 — Grow by hardening first, not by collecting checks
+### decision-0006 -- Grow by hardening first, not by collecting checks
 **Phase:** 3
 
 The next meaningful credibility gains come from better targeting, reachability fidelity, wording precision, and real-repo validation. New checks can wait.
@@ -360,15 +360,20 @@ The next meaningful credibility gains come from better targeting, reachability f
 
 ## Immediate next moves
 
-1. ~~verify the current unreleased correctness fixes with the existing smoke set~~ — done
-2. ~~run the tool against a few real async Rust repos and note any surprising noise or misses~~ — done: tested mini-redis, hyper, reqwest, axum, sqlx, tokio; zero false positives found
-3. ~~tighten diagnostic wording anywhere the implementation is more heuristic than the prose currently implies~~ — done: all wording audited and confirmed accurate
-4. ~~keep README, BUILD, CHANGELOG, and release docs aligned before deciding to publish~~ — done
-5. ~~decide whether the next cut is a small patch release now or after one more hardening pass~~ — done: released `0.1.3`
+1. ~~verify the current unreleased correctness fixes with the existing smoke set~~ -- done
+2. ~~run the tool against a few real async Rust repos and note any surprising noise or misses~~ -- done: tested mini-redis, hyper, reqwest, axum, sqlx, tokio; zero false positives found
+3. ~~tighten diagnostic wording anywhere the implementation is more heuristic than the prose currently implies~~ -- done: all wording audited and confirmed accurate
+4. ~~keep README, BUILD, CHANGELOG, and release docs aligned before deciding to publish~~ -- done
+5. ~~decide whether the next cut is a small patch release now or after one more hardening pass~~ -- done: released `0.1.3`, then promoted to `1.0.0`
 
 ---
 
 ## Progress log
+
+### 2026-03-25
+
+- released `1.0.0` to crates.io: promoted to production release
+- updated BUILD.md, CHANGELOG.md, and Cargo.toml for the `1.0.0` release
 
 ### 2026-03-24
 
@@ -376,8 +381,8 @@ The next meaningful credibility gains come from better targeting, reachability f
 - updated BUILD.md, CHANGELOG.md, and Cargo.toml for the `0.1.3` release
 - Milestone A achieved
 - completed Phase 3 correctness hardening: all open work items verified
-- spot-checked the tool against six real async Rust repos (mini-redis, hyper, reqwest, axum, sqlx, tokio) — zero false positives; all findings were legitimate true positives
-- audited all diagnostic wording and explain content against current detection boundaries — no overstated claims found
+- spot-checked the tool against six real async Rust repos (mini-redis, hyper, reqwest, axum, sqlx, tokio) -- zero false positives; all findings were legitimate true positives
+- audited all diagnostic wording and explain content against current detection boundaries -- no overstated claims found
 - verified JSON output stability against schema_version 1 contract
 - full smoke set and all 44 tests pass cleanly after clean rebuild
 - Milestone A criteria met: next patch release is defensible
@@ -399,4 +404,4 @@ The next meaningful credibility gains come from better targeting, reachability f
 
 ---
 
-*Only log things that actually happened. Aspirations belong in phases, milestones, and next moves — not in the history.*
+*Only log things that actually happened. Aspirations belong in phases, milestones, and next moves -- not in the history.*
