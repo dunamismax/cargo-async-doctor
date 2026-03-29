@@ -6,6 +6,16 @@ This project follows a lightweight Keep a Changelog style. Add entries to `Unrel
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-03-29
+
+### Changed
+
+- no diagnostic behavior, check IDs, CLI flags, or JSON schema changes in this maintenance release
+
+### Docs
+
+- synchronized the README, BUILD manual, and release metadata around the stable 1.x production line
+
 ## [1.0.0] - 2026-03-25
 
 ### Changed

@@ -33,13 +33,13 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ## Repo snapshot
 
-**Published crate:** `1.0.0`
-**Current branch posture:** clean post-`1.0.0` release
+**Published crate:** `1.0.1`
+**Current branch posture:** clean post-`1.0.1` release
 **Active phases:** Phase 5 (release discipline); Phase 3 (correctness hardening) is complete
 
 ### Shipped today
 
-- Crate `cargo-async-doctor` published on crates.io at `1.0.0`
+- Crate `cargo-async-doctor` published on crates.io at `1.0.1`
 - Three shipped checks:
   - `blocking-sleep-in-async`
   - `blocking-std-api-in-async`
@@ -66,7 +66,7 @@ This repo is not trying to become a general async linter. Trust is the product.
 
 ### Next release focus
 
-v1.0.0 is released. The next release should focus on either a fourth check (`guard-across-await`) if the false-positive story is defensible, or additional correctness/hardening work that earns further trust.
+v1.0.1 is released. The next release should focus on either a fourth check (`guard-across-await`) if the false-positive story is defensible, or additional correctness/hardening work that earns further trust.
 
 ---
 
@@ -290,7 +290,7 @@ Active risks:
 
 ### Milestone A -- Next patch release is defensible
 
-**Status:** achieved -- `1.0.0` released 2026-03-25
+**Status:** achieved -- `1.0.1` released 2026-03-29
 
 Definition:
 - unreleased correctness fixes are verified locally and spot-checked on real repos
@@ -369,6 +369,11 @@ The next meaningful credibility gains come from better targeting, reachability f
 ---
 
 ## Progress log
+
+### 2026-03-29
+
+- released `1.0.1` to crates.io: maintenance release with no diagnostic or JSON-contract changes
+- updated README.md, BUILD.md, CHANGELOG.md, Cargo.toml, and Cargo.lock for the `1.0.1` release
 
 ### 2026-03-25
 

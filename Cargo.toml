@@ -1,6 +1,6 @@
 [package]
 name = "cargo-async-doctor"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Cargo subcommand for diagnosing common async Rust hazards"
 authors = ["Stephen Sawyer"]
